@@ -273,6 +273,7 @@ function parseScore(xmlText){
   // notes brutes par mesure
   const raw=[]; // {m, t (noires dans la mesure), d, midi, key, tieStart, tieStop}
   const trackDefs=new Map();
+  const clefs={}; // "pid|portée" -> "G" (clé de sol), "G8" (sol 8 en bas), "F" (fa)…
   parts.forEach((part,pi)=>{
     const pid=part.getAttribute("id"); const pname=partNames[pid]||("Partie "+(pi+1));
     // accompagnement : nom explicite, ou grande portée (2 portées et plus) sans nom de voix
@@ -288,6 +289,8 @@ function parseScore(xmlText){
           const d=txt(el,"divisions"); if(d) div=+d;
           const b=txt(el,"time > beats"), bt=txt(el,"time > beat-type"); if(b){beats=+b.split("+").reduce((a,x)=>a+ +x,0)||4; beatType=+bt||4;}
           const tr=txt(el,"transpose > chromatic"), oc=txt(el,"transpose > octave-change"); if(tr!==null) transpose=(+tr)+12*(+oc||0);
+          el.querySelectorAll("clef").forEach(c=>{ const k=pid+"|"+(c.getAttribute("number")||"1"); if(clefs[k]) return;
+            const sg=txt(c,"sign")||""; clefs[k]=sg+((+(txt(c,"clef-octave-change")||0))<0?"8":""); });
         } else if(tag==="backup"){ t-=(+txt(el,"duration")||0)/div; }
         else if(tag==="forward"){ t+=(+txt(el,"duration")||0)/div; maxT=Math.max(maxT,t); }
         else if(tag==="direction"||tag==="sound"){
@@ -371,6 +374,7 @@ function parseScore(xmlText){
   // ordre final : par partie puis aigu -> grave
   defs=Object.values(byPart).flat();
   const tracks=defs.map((d,i)=>({key:d.key,name:d.name.trim(),accomp:d.accomp,lo:d.lo,hi:d.hi,color:COLORS[i%COLORS.length],
+    clef:clefs[d.pid+"|"+d.staff]||clefs[d.pid+"|1"]||null, staffKey:d.pid+"|"+d.staff,
     vol:d.accomp?0.6:1,solo:false,mute:false,instr:d.accomp?"piano":"voix",idx:i}));
   const trackIndex={}; tracks.forEach((t,i)=>trackIndex[t.key]=i);
 
@@ -474,9 +478,30 @@ function nameTracks(tracks, events){
   const gap=(j,min)=>ord[j-1].m-ord[j].m>=min;
   const satb = ord.length===4 && gap(1,2.5)&&gap(2,2.5)&&gap(3,2.5);
   const ssatb= ord.length===5 && gap(1,1.5)&&gap(2,2.5)&&gap(3,2.5)&&gap(4,2.5);
-  const names = satb ? ["Soprano","Alto","Ténor","Basse"]
-              : ssatb ? ["Soprano 1","Soprano 2","Alto","Ténor","Basse"]
-              : ord.map((_,j)=>"Voix "+(j+1)+(ord.length>1&&j===0?" (en haut)":ord.length>1&&j===ord.length-1?" (en bas)":""));
+  const neutral=list=>list.map((_,j)=>"Voix "+(j+1)+(list.length>1&&j===0?" (en haut)":list.length>1&&j===list.length-1?" (en bas)":""));
+  // La clé dit d'abord qui chante : clé de sol = voix de femmes, clé de fa ou sol 8 = voix d'hommes.
+  // (Une partition « Soliste, Soprano, Alto, Hommes » ne doit pas devenir « Soprano, Alto, Ténor, Basse ».)
+  const sex=o=>o.t.clef==="G"?"f":(o.t.clef==="F"||o.t.clef==="G8")?"m":null;
+  const W=ord.filter(o=>sex(o)==="f"), M=ord.filter(o=>sex(o)==="m");
+  const clefsKnown=W.length+M.length===ord.length && W.length>0 && M.length>0 &&
+    ord.every((o,j)=>j===0||!(sex(ord[j-1])==="m"&&sex(o)==="f"));   // femmes au-dessus, hommes en dessous
+  let names;
+  if(clefsKnown){
+    const step=(L,j,min)=>L[j-1].m-L[j].m>=min;
+    const staves=L=>new Set(L.map(o=>o.t.staffKey)).size;
+    const wN = W.length===2 && step(W,1,2.5) ? ["Soprano","Alto"]
+             : W.length===3 && staves(W)===3 && M.length>=2 && step(W,1,1.5)&&step(W,2,2.5) ? ["Soprano 1","Soprano 2","Alto"]
+             : W.length===1 ? ["Femmes"]
+             : neutral(W).map(n=>n.replace(/^Voix/,"Voix de femmes"));
+    const mN = M.length===2 && step(M,1,2.5) ? ["Ténor","Basse"]
+             : M.length===1 ? ["Hommes"]
+             : neutral(M).map(n=>n.replace(/^Voix/,"Voix d'hommes"));
+    names=[...wN,...mN];
+  } else {
+    names = satb ? ["Soprano","Alto","Ténor","Basse"]
+          : ssatb ? ["Soprano 1","Soprano 2","Alto","Ténor","Basse"]
+          : neutral(ord);
+  }
   ord.forEach((o,j)=>{ o.t.name=names[j]; });
   tracks.forEach(t=>{ if(t.accomp && /^(part|partie|p)\s*\d*$/i.test(t.name.trim())) t.name="Accompagnement"; });
 }
@@ -519,8 +544,11 @@ function checkScore(measInfo, tracks, events, timeline, partNames){
     const sorted=seq.map(e=>e.midi).sort((x,y)=>x-y); if(sorted.length<8) return;
     const med=sorted[Math.floor(sorted.length/2)];
     const byM=new Map(); seq.forEach(e=>{ const m=timeline[e.seg].m; (byM.get(m)||byM.set(m,[]).get(m)).push(e.midi); });
+    // une mesure dont les notes reviennent à l'identique ailleurs dans la voix est un motif écrit
+    // (refrain, phrase reprise), pas une erreur de lecture : la reconnaissance ne se trompe pas deux fois pareil
+    const sig=new Map(); byM.forEach(arr=>{ const k=arr.join(","); sig.set(k,(sig.get(k)||0)+1); });
     byM.forEach((arr,m)=>{ const mean=arr.reduce((x,y)=>x+y,0)/arr.length;
-      if(arr.length>=2 && Math.abs(mean-med)>=10) add(m, t.name, `registre inhabituel (${mean>med?"trop aigu":"trop grave"} pour cette voix : clé ou octave mal lue ?)`); });
+      if(arr.length>=2 && Math.abs(mean-med)>=10 && sig.get(arr.join(","))<2) add(m, t.name, `registre inhabituel (${mean>med?"trop aigu":"trop grave"} pour cette voix : clé ou octave mal lue ?)`); });
   });
   return S;
 }
