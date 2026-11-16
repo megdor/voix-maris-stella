@@ -609,6 +609,7 @@ function buildSystems(syms, staves, mask, ink, levels, linksModel, forced) {
 			systems.push({ staves: [k], columns: [] });
 		}
 	});
+	mergeAligned(syms, staves, systems);
 	systems.forEach((sy, n) => {
 		sy.staves.forEach((k, pos) => {
 			staves[k].system = n;
@@ -643,6 +644,82 @@ function buildSystems(syms, staves, mask, ink, levels, linksModel, forced) {
 		);
 	});
 	return systems;
+}
+
+// Chœur Maris Stella: a tall choral system whose groups of staves have
+// their own bar lines (Ligeti, Lux aeterna: S, A, T, B each barred apart,
+// joined only by a thin opening line) is cut into several systems; the
+// voices then follow one another instead of sounding together. Two
+// neighbouring systems are one when their bars start and end at the same
+// places (each with several staves, six staves or more together, edges
+// and every inner bar line aligned within a staff space or so).
+function bounds(syms, staves, ks) {
+	const sp = ks.reduce((s, k) => s + staves[k].sp, 0) / ks.length;
+	const xs = [];
+	for (const k of ks) {
+		for (const i of staves[k].bars) {
+			const b = syms[i];
+			if (b.p >= 0.5 && !b.synthetic) {
+				xs.push(b.box[0], b.box[2]);
+			}
+		}
+	}
+	xs.sort((a, b) => a - b);
+	const groups = [];
+	for (const x of xs) {
+		const g = groups[groups.length - 1];
+		if (g && x - g[g.length - 1] <= sp) {
+			g.push(x);
+		} else {
+			groups.push([x]);
+		}
+	}
+	const left = Math.min(...ks.map((k) => staves[k].x0));
+	const right = Math.max(...ks.map((k) => staves[k].x1));
+	const inner = groups
+		.filter((g) => g.length >= ks.length)
+		.map((g) => g.reduce((a, b) => a + b, 0) / g.length)
+		.filter((x) => x > left + 3 * sp && x < right - 2 * sp);
+	return { sp, left, right, inner };
+}
+
+function sameBars(syms, staves, A, B) {
+	if (A.length < 2 || B.length < 2 || A.length + B.length < 6) {
+		return false;
+	}
+	const a = bounds(syms, staves, A);
+	const b = bounds(syms, staves, B);
+	const sp = (a.sp + b.sp) / 2;
+	if (Math.abs(a.left - b.left) > 1.5 * sp || Math.abs(a.right - b.right) > 1.5 * sp) {
+		return false;
+	}
+	if (a.inner.length < 3 || a.inner.length !== b.inner.length) {
+		return false;
+	}
+	if (!a.inner.every((x, j) => Math.abs(x - b.inner[j]) <= 0.8 * sp)) {
+		return false;
+	}
+	const gaps = [];
+	for (const ks of [A, B]) {
+		for (let j = 1; j < ks.length; j++) {
+			gaps.push((staves[ks[j]].y0 - staves[ks[j - 1]].y1) / sp);
+		}
+	}
+	gaps.sort((x, y) => x - y);
+	const g = gaps[gaps.length >> 1];
+	const between = (staves[B[0]].y0 - staves[A[A.length - 1]].y1) / sp;
+	return between <= 2.5 * Math.max(g, 2);
+}
+
+function mergeAligned(syms, staves, systems) {
+	for (let n = 1; n < systems.length; ) {
+		if (sameBars(syms, staves, systems[n - 1].staves, systems[n].staves)) {
+			systems[n - 1].staves.push(...systems[n].staves);
+			systems.splice(n, 1);
+		} else {
+			n++;
+		}
+	}
 }
 
 function jointBars(syms, staves, sy, mask) {
