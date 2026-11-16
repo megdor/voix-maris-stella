@@ -89,3 +89,25 @@ export async function takeCameraPhoto() {
 		throw e;
 	}
 }
+
+/**
+ * Chœur Maris Stella : un titre lisible tiré du nom du fichier déposé, quand la
+ * partition n'en porte pas (« Iesous_Ahatonnia Quartel (2).pdf » → « Iesous Ahatonnia Quartel »).
+ * Vide si le nom n'apporte rien (photo d'appareil, scan numéroté…).
+ */
+export function titleFromFileName(name) {
+	let t = String(name ?? "")
+		.replace(/\.[a-z0-9]{2,8}$/i, "") // extension
+		.replace(/[_]+/g, " ")
+		.replace(/\s*\(\d+\)\s*$/, "") // « (2) » des copies
+		.replace(/\s*[-–]?\s*(copie|copy)(\s*\d+)?\s*$/i, "")
+		.replace(/\s+\d{1,2}$/, "") // « … 2 » final
+		.replace(/\s+/g, " ")
+		.trim();
+	// noms sans intérêt : IMG_1234, Scan 3, DSC0001, page-2, 20261016_101530…
+	if (/^(img|image|dsc|dcim|scan|photo|page|pxl|wp|document|doc)[\s-]*\d*$/i.test(t) || /^[\d\s-]+$/.test(t)) {
+		return "";
+	}
+	return t;
+}
+

@@ -6,7 +6,7 @@
 // one (else a frame of the preview).
 import { Capacitor } from "@capacitor/core";
 import { onBeforeUnmount, ref } from "vue";
-import { imagesFromPhotos, takeCameraPhoto } from "../photos.js";
+import { imagesFromPhotos, takeCameraPhoto, titleFromFileName } from "../photos.js";
 import { imageFromSource } from "../pipeline/index.js";
 import { useOmrState } from "../useOmr.js";
 
@@ -32,6 +32,13 @@ async function onFileChange(event) {
 
 /** Add images (Blobs or Files) as pages, in order. */
 async function addPhotos(photos) {
+	// pas encore de titre : celui du fichier déposé (modifiable au-dessus de la partition)
+	if (!String(omr.title ?? "").trim()) {
+		const t = titleFromFileName(photos[0]?.name);
+		if (t) {
+			omr.title = t;
+		}
+	}
 	omr.addImages(await imagesFromPhotos(photos));
 }
 

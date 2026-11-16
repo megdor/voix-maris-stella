@@ -33,7 +33,7 @@ import {
 	keepStorage,
 	putScore,
 } from "./library.js";
-import { imagesFromPhotos } from "./photos.js";
+import { imagesFromPhotos, titleFromFileName } from "./photos.js";
 import { fullQuad } from "./pipeline/capture/index.js";
 import {
 	detectPageCorners,
@@ -621,6 +621,8 @@ export function useOmr() {
 	/** Start a new score with these photos (Blobs) as its pages. */
 	async function newScoreWith(photos) {
 		newScore();
+		// Chœur Maris Stella : le titre de l'œuvre d'après le fichier, modifiable ensuite
+		title.value = titleFromFileName(photos[0]?.name);
 		addImages(await imagesFromPhotos(photos));
 	}
 
