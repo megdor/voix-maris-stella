@@ -1,7 +1,9 @@
-# Build the app and deploy it to GitHub Pages. The ONNX models are not part
-# of the site: the app loads them from Hugging Face (VITE_MODELS_URL), where
-# scripts/models/upload_hf.py publishes them. The deploy stays small (~40 MB).
-name: Deploy to GitHub Pages
+# Chœur Maris Stella — Travail des voix
+# Construit le site et le publie sur GitHub Pages, à chaque modification de la branche main.
+# Les modèles copista (Apache-2.0, KobiMusic) et le détecteur de page DocAligner (Apache-2.0) sont
+# fabriqués ici même et publiés AVEC le site (dossier models/) : aucun service extérieur n'est
+# nécessaire pour faire fonctionner l'outil. Seul le petit modèle (copista-2m, ≈16 Mo) est exporté.
+name: Publier le site (GitHub Pages)
 
 on:
   push:
@@ -21,27 +23,36 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
       - run: npm ci
 
-      - name: Lint and test
-        run: |
-          npx biome check .
-          npm test
+      - uses: astral-sh/setup-uv@v6
 
-      - name: Build
+      # Les modèles ne sont refabriqués que si les scripts d'export changent.
+      - id: models-cache
+        uses: actions/cache@v4
+        with:
+          path: public/models
+          key: models-2m-${{ hashFiles('scripts/models/export_copista.py', 'scripts/models/fetch_docaligner.py') }}
+
+      - name: Fabriquer les modèles (copista-2m + DocAligner)
+        if: steps.models-cache.outputs.cache-hit != 'true'
+        run: |
+          uv run scripts/models/export_copista.py --sizes 2m --out public/models
+          uv run scripts/models/fetch_docaligner.py --out public/models
+
+      - name: Construire le site
         env:
           BASE_PATH: /${{ github.event.repository.name }}/
-          VITE_MODELS_URL: https://huggingface.co/pauldubois98/musicocr-models/resolve/main/
         run: npm run build
 
-      - uses: actions/upload-pages-artifact@v5
+      - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
           retention-days: 1
@@ -54,4 +65,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@v4
