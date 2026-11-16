@@ -3,13 +3,13 @@
 import { imageFromSource } from "./pipeline/index.js";
 
 // PDF (Chœur Maris Stella) : chaque page d'un PDF devient une image à 300 ppp, rendue dans le
-// navigateur par pdf.js (Apache-2.0), copié dans le site (public/vendor/pdfjs) : rien n'est envoyé.
+// navigateur par pdf.js (Apache-2.0), copié dans le site (public/pdf.min.mjs, licence : public/pdfjs-LICENSE.txt) : rien n'est envoyé.
 const BASE = import.meta.env?.BASE_URL ?? "/";
 let pdfjsPromise = null;
 function loadPdfjs() {
 	if (!pdfjsPromise) {
-		pdfjsPromise = import(/* @vite-ignore */ `${BASE}vendor/pdfjs/pdf.min.mjs`).then((pdfjs) => {
-			pdfjs.GlobalWorkerOptions.workerSrc = `${BASE}vendor/pdfjs/pdf.worker.min.mjs`;
+		pdfjsPromise = import(/* @vite-ignore */ `${BASE}pdf.min.mjs`).then((pdfjs) => {
+			pdfjs.GlobalWorkerOptions.workerSrc = `${BASE}pdf.worker.min.mjs`;
 			return pdfjs;
 		});
 	}
