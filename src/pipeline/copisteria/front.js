@@ -651,8 +651,9 @@ function buildSystems(syms, staves, mask, ink, levels, linksModel, forced) {
 // joined only by a thin opening line) is cut into several systems; the
 // voices then follow one another instead of sounding together. Two
 // neighbouring systems are one when their bars start and end at the same
-// places (each with several staves, six staves or more together, edges
-// and every inner bar line aligned within a staff space or so).
+// places (each with several staves, six staves or more together, three
+// inner bar lines or more, all aligned within a staff space or so; the
+// staff ends found on such pages are too uneven to be compared).
 function bounds(syms, staves, ks) {
 	const sp = ks.reduce((s, k) => s + staves[k].sp, 0) / ks.length;
 	const xs = [];
@@ -690,9 +691,6 @@ function sameBars(syms, staves, A, B) {
 	const a = bounds(syms, staves, A);
 	const b = bounds(syms, staves, B);
 	const sp = (a.sp + b.sp) / 2;
-	if (Math.abs(a.left - b.left) > 1.5 * sp || Math.abs(a.right - b.right) > 1.5 * sp) {
-		return false;
-	}
 	if (a.inner.length < 3 || a.inner.length !== b.inner.length) {
 		return false;
 	}
