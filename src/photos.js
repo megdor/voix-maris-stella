@@ -19,7 +19,8 @@ const isPdf = (f) => f.type === "application/pdf" || /\.pdf$/i.test(f.name ?? ""
 /** Les pages d'un PDF, en images PNG (300 ppp, 3600 pixels au plus de côté). */
 export async function pagesFromPdf(file) {
 	const pdfjs = await loadPdfjs();
-	const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
+	// wasmUrl : décodeurs des images JPEG 2000 / JBIG2 (courants dans les PDF de scans), sinon pages blanches
+	const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()), wasmUrl: BASE });
 	const doc = await task.promise;
 	const blobs = [];
 	for (let n = 1; n <= doc.numPages; n++) {
