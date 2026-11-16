@@ -57,6 +57,17 @@
   .transport .big{font-size:17px;padding:9px 18px}
   #pos{font-variant-numeric:tabular-nums;min-width:120px}
   .sep{width:1px;height:26px;background:var(--line)}
+  #moreBtn{display:none}
+  /* téléphone : barre de lecture compacte, les autres réglages sous « ⚙ Options » */
+  @media (max-width:700px){
+    .transport{padding:8px 10px}
+    .transport .big{font-size:16px;padding:8px 14px}
+    #moreBtn{display:inline-block}
+    .transport .sep{display:none}
+    #pos{min-width:0}
+    #bpm{display:none}
+    .transport:not(.open) .xtra{display:none!important}
+  }
   /* views */
   .tabs{display:flex;gap:6px}
   #rollWrap{position:relative;overflow:hidden;border-radius:10px;border:1px solid var(--line);background:#fff;margin-top:10px}
@@ -146,12 +157,13 @@
         <div class="sep"></div>
         <label>Tempo <input id="speed" type="range" min="40" max="150" step="5" value="100"> <span id="speedVal">100 %</span></label>
         <span class="muted" id="bpm"></span>
-        <div class="sep"></div>
-        <button id="giveNote" title="Jouer la première note de chaque voix">♪ Donner la note</button>
-        <label class="chk"><input id="countIn" type="checkbox" checked> Décompte</label>
-        <label class="chk"><input id="metro" type="checkbox"> Métronome</label>
+        <button id="moreBtn" type="button" aria-expanded="false" title="Afficher les autres réglages">⚙ Options</button>
+        <div class="sep xtra"></div>
+        <button id="giveNote" class="xtra" title="Jouer la première note de chaque voix">♪ Donner la note</button>
+        <label class="chk xtra"><input id="countIn" type="checkbox" checked> Décompte</label>
+        <label class="chk xtra"><input id="metro" type="checkbox"> Métronome</label>
       </div>
-      <div class="row" style="margin-top:8px">
+      <div class="row xtra" style="margin-top:8px">
         <label class="chk"><input id="loop" type="checkbox"> Travailler un passage :</label>
         <span>de la mesure <input id="from" type="number" min="1" value="1"> à <input id="to" type="number" min="1" value="4"></span>
         <span class="muted" style="font-size:12.5px">(en boucle)</span>
@@ -958,6 +970,11 @@ window.__test={get S(){return S;},openText,P,curQ};
   if(!xml) return;
   try{ await openText(xml); if(titre && (!S.title || S.title==="Partition")) $("#title").textContent=titre; }
   catch(e){ msg("La partition reçue n'a pas pu être ouverte : "+(e.message||e),true); }
+})();
+// téléphone : ouvrir/fermer les réglages secondaires de la barre de lecture
+(function(){ const b=document.getElementById("moreBtn"); if(!b) return;
+  b.addEventListener("click",()=>{ const t=b.closest(".transport"); const o=t.classList.toggle("open");
+    b.setAttribute("aria-expanded",o?"true":"false"); b.textContent=o?"⚙ Masquer":"⚙ Options"; });
 })();
 </script>
 </body>
