@@ -17,7 +17,7 @@ const settings = computed(() => (omr.perPage && omr.page ? omr.page : omr));
 				:checked="omr.perPage"
 				@change="omr.setPerPage($event.target.checked)"
 			/>
-			Separate Lighting and Cleaning for each page
+			Éclairage et nettoyage page par page
 		</label>
 		<p v-if="omr.perPage && omr.pages.length > 1" class="hint applies">
 			For page {{ omr.currentIndex + 1 }} only.
