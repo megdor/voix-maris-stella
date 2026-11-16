@@ -171,6 +171,37 @@ function onStaff(el, staff, shift) {
 	return c;
 }
 
+/** Score parts a and a+1 (two staves of one part) become one part on two staves. */
+function joinStaves(root, plist, parts, states, sigs, a) {
+	const ms = pairMeasures(parts[a], parts[a + 1]);
+	const first = ms[0];
+	if (first) {
+		let attrs = childrenOf(first, "attributes")[0];
+		if (!attrs) {
+			attrs = new El("attributes");
+			first.children.unshift(attrs);
+		}
+		if (!childrenOf(attrs, "staves").length) {
+			const st = new El("staves", {}, 2);
+			const at = attrs.children.findIndex((c) => ["part-symbol", "instruments", "clef", "staff-details", "transpose"].includes(c.tag));
+			if (at < 0) {
+				attrs.children.push(st);
+			} else {
+				attrs.children.splice(at, 0, st);
+			}
+		}
+	}
+	parts[a].children = ms;
+	const gone = parts[a + 1];
+	const id = attr(gone, "id");
+	root.children = root.children.filter((c) => c !== gone);
+	plist.children = plist.children.filter((c) => !(c.tag === "score-part" && attr(c, "id") === id));
+	sigs[a] = pairSig(sigs[a], sigs[a + 1]);
+	parts.splice(a + 1, 1);
+	states.splice(a + 1, 1);
+	sigs.splice(a + 1, 1);
+}
+
 /** Two one-staff parts' measures as the measures of one part on two staves. */
 function pairMeasures(upper, lower) {
 	const A = childrenOf(upper, "measure");
@@ -226,6 +257,9 @@ function matchParts(old, page) {
 	const cost = Array.from({ length: I + 1 }, () => new Array(J + 1).fill(Infinity));
 	const move = Array.from({ length: I + 1 }, () => new Array(J + 1).fill(null));
 	cost[0][0] = 0;
+	// only while the score has no part on two staves yet (else a choir in closed
+	// score, women's staff over men's, could be taken for a piano)
+	const hasGrand = old.some((o) => o.staves >= 2);
 	for (let i = 0; i <= I; i++) {
 		for (let j = 0; j <= J; j++) {
 			const c = cost[i][j];
@@ -256,6 +290,15 @@ function matchParts(old, page) {
 					move[i + 1][j + 2] = "pair";
 				}
 			}
+			// the other way round: a piano read as two parts on the earlier pages,
+			// found whole (two staves) on this one
+			if (!hasGrand && i + 1 < I && j < J && old[i].staves === 1 && old[i + 1].staves === 1 && page[j].staves === 2) {
+				const v = c + PAIR + unlike(pairSig(old[i], old[i + 1]), page[j]);
+				if (v < cost[i + 2][j + 1]) {
+					cost[i + 2][j + 1] = v;
+					move[i + 2][j + 1] = "unpair";
+				}
+			}
 		}
 	}
 	// back from the end: for each page part, its score part, or where a new one goes
@@ -267,6 +310,10 @@ function matchParts(old, page) {
 		if (mv === "match") {
 			out[j - 1] = { to: i - 1 };
 			i--;
+			j--;
+		} else if (mv === "unpair") {
+			out[j - 1] = { to: i - 2, merge: i - 1 };
+			i -= 2;
 			j--;
 		} else if (mv === "pair") {
 			out[j - 2] = { to: i - 1, pair: j - 1 };
@@ -370,6 +417,23 @@ export function joinTrees(trees) {
 		const pageParts = partsOf(tree);
 		const pageSigs = pageParts.map(signature);
 		const plan = matchParts(sigs, pageSigs);
+		// score parts that are the two staves of one part (seen whole on this page):
+		// put back together first, from the last, shifting the plan's indices
+		const merges = plan.filter((p) => p.merge !== undefined).map((p) => p.to).sort((a, b) => b - a);
+		for (const a of merges) {
+			joinStaves(root, plist, parts, states, sigs, a);
+			for (const p of plan) {
+				if (p.to !== undefined && p.to > a) {
+					p.to--;
+				}
+				if (p.before !== undefined && p.before > a) {
+					p.before--;
+				}
+				if (p.to === a) {
+					delete p.merge;
+				}
+			}
+		}
 		// parts first met on this page: empty until now, placed among the others
 		// in the page's order (inserted from the last, so the indices stay right)
 		const owner = new Array(pageParts.length);
