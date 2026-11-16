@@ -1,6 +1,8 @@
 // Several pages of one piece as one score: the pages' MusicXML trees (see
 // copisteria/write.js writeTree) joined part by part, in page order. Parts
-// are matched by order; the measures are numbered on from page to page, each
+// are matched by what they are (staves, clefs, register), keeping their order
+// (Chœur Maris Stella : une page avec une portée en plus, un « Descant » par
+// exemple, ne décale plus toutes les voix d'un cran) ; the measures are numbered on from page to page, each
 // later page starts with a page break, and the attributes it repeats from
 // the page before (divisions, key, time, staves, clefs) are dropped — real
 // changes are kept. A part missing from a page gets empty measures there.
@@ -65,6 +67,121 @@ function dropRepeated(measure, state) {
 	}
 }
 
+// ------------------------------------------------- matching parts across pages
+
+const STEP = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+
+/** What a part of a page looks like: its staves, their clefs, its mean pitch. */
+function signature(part) {
+	let staves = 1;
+	const clefs = new Map();
+	let sum = 0;
+	let n = 0;
+	for (const m of childrenOf(part, "measure")) {
+		for (const attrs of childrenOf(m, "attributes")) {
+			for (const el of attrs.children) {
+				if (el.tag === "staves") {
+					staves = Number(el.text) || 1;
+				} else if (el.tag === "clef") {
+					const k = attr(el, "number") ?? "1";
+					if (!clefs.has(k)) {
+						const sign = childrenOf(el, "sign")[0]?.text ?? "";
+						const oct = Number(childrenOf(el, "clef-octave-change")[0]?.text ?? 0);
+						clefs.set(k, sign + (oct < 0 ? "8" : ""));
+					}
+				}
+			}
+		}
+		for (const note of childrenOf(m, "note")) {
+			const p = childrenOf(note, "pitch")[0];
+			if (!p) {
+				continue;
+			}
+			const step = childrenOf(p, "step")[0]?.text;
+			const octave = Number(childrenOf(p, "octave")[0]?.text);
+			const alter = Number(childrenOf(p, "alter")[0]?.text ?? 0);
+			if (step in STEP && Number.isFinite(octave)) {
+				sum += 12 * (octave + 1) + STEP[step] + alter;
+				n++;
+			}
+		}
+	}
+	return { staves, clefs, mean: n ? sum / n : null };
+}
+
+/** How unlike two parts are (0: alike). */
+function unlike(a, b) {
+	let c = 0;
+	if (a.staves !== b.staves) {
+		c += 100;
+	}
+	for (const [k, v] of a.clefs) {
+		if (b.clefs.has(k) && b.clefs.get(k) !== v) {
+			c += 30;
+		}
+	}
+	if (a.mean !== null && b.mean !== null) {
+		c += Math.min(24, Math.abs(a.mean - b.mean));
+	}
+	return c;
+}
+
+const SKIP_OLD = 25; // a part of the score with nothing on this page
+const NEW_PART = 40; // a part first met on this page
+
+/**
+ * Page part j → score part index (or -1: a new part), in order, at the least
+ * total unlikeness (an alignment: parts never swap places).
+ */
+function matchParts(old, page) {
+	const I = old.length;
+	const J = page.length;
+	const cost = Array.from({ length: I + 1 }, () => new Array(J + 1).fill(Infinity));
+	const move = Array.from({ length: I + 1 }, () => new Array(J + 1).fill(null));
+	cost[0][0] = 0;
+	for (let i = 0; i <= I; i++) {
+		for (let j = 0; j <= J; j++) {
+			const c = cost[i][j];
+			if (c === Infinity) {
+				continue;
+			}
+			if (i < I && j < J) {
+				const v = c + unlike(old[i], page[j]);
+				if (v < cost[i + 1][j + 1]) {
+					cost[i + 1][j + 1] = v;
+					move[i + 1][j + 1] = "match";
+				}
+			}
+			if (i < I && c + SKIP_OLD < cost[i + 1][j]) {
+				cost[i + 1][j] = c + SKIP_OLD;
+				move[i + 1][j] = "skip";
+			}
+			if (j < J && c + NEW_PART < cost[i][j + 1]) {
+				cost[i][j + 1] = c + NEW_PART;
+				move[i][j + 1] = "new";
+			}
+		}
+	}
+	// back from the end: for each page part, its score part, or where a new one goes
+	const out = new Array(J);
+	let i = I;
+	let j = J;
+	while (i > 0 || j > 0) {
+		const mv = move[i][j];
+		if (mv === "match") {
+			out[j - 1] = { to: i - 1 };
+			i--;
+			j--;
+		} else if (mv === "skip") {
+			i--;
+		} else {
+			out[j - 1] = { before: i }; // new part, placed before score part i
+			j--;
+		}
+	}
+	return out;
+}
+
 /**
  * The pages' trees joined into one score-partwise tree (the inputs are left
  * as they are). One page: a copy of it.
@@ -89,27 +206,67 @@ export function joinTrees(trees) {
 		0,
 		...parts.map((p) => childrenOf(p, "measure").length),
 	);
+	// what each score part looks like (from the last page where it was met)
+	const sigs = parts.map(signature);
+	let nextId = parts.length;
 	for (const tree of trees.slice(1)) {
 		const pageParts = partsOf(tree);
-		// a part first met on this page: empty until now
-		while (parts.length < pageParts.length) {
-			const n = parts.length + 1;
-			const sp = plist.sub("score-part", null, { id: `P${n}` });
-			sp.sub("part-name", `Part ${n}`);
-			const part = root.sub("part", null, { id: `P${n}` });
+		const pageSigs = pageParts.map(signature);
+		const plan = matchParts(sigs, pageSigs);
+		// parts first met on this page: empty until now, placed among the others
+		// in the page's order (inserted from the last, so the indices stay right)
+		const owner = new Array(pageParts.length);
+		const fresh = [];
+		plan.forEach((p, j) => {
+			if ("to" in p) {
+				owner[j] = p.to;
+			} else {
+				fresh.push([j, p.before]);
+			}
+		});
+		const pageOf = new Map(); // score part (object) → page part index
+		plan.forEach((p, j) => {
+			if ("to" in p) {
+				pageOf.set(parts[p.to], j);
+			}
+		});
+		for (const [j, before] of fresh.reverse()) {
+			nextId++;
+			const id = `P${nextId}`;
+			const sp = new El("score-part", { id });
+			sp.sub("part-name", `Part ${nextId}`);
+			const part = new El("part", { id });
 			for (let i = 1; i <= measures; i++) {
 				part.sub("measure", null, { number: i });
 			}
-			parts.push(part);
-			states.push(new Map());
+			// in the part list and the score, before score part `before` (or last)
+			const anchor = parts[before];
+			const spAnchor = anchor
+				? plist.children.find((c) => c.tag === "score-part" && attr(c, "id") === attr(anchor, "id"))
+				: null;
+			if (spAnchor) {
+				plist.children.splice(plist.children.indexOf(spAnchor), 0, sp);
+				root.children.splice(root.children.indexOf(anchor), 0, part);
+			} else {
+				plist.children.push(sp);
+				root.children.push(part);
+			}
+			parts.splice(before, 0, part);
+			states.splice(before, 0, new Map());
+			sigs.splice(before, 0, pageSigs[j]);
+			pageOf.set(part, j);
 		}
 		const count = Math.max(
 			0,
 			...pageParts.map((p) => childrenOf(p, "measure").length),
 		);
 		parts.forEach((part, n) => {
-			const pageMeasures = pageParts[n]
-				? childrenOf(pageParts[n], "measure").map(clone)
+			const j = pageOf.get(part);
+			if (j !== undefined && pageSigs[j].mean !== null) {
+				sigs[n] = pageSigs[j]; // its look on its latest page
+			}
+			const pageMeasures = j !== undefined
+				? childrenOf(pageParts[j], "measure").map(clone)
 				: [];
 			for (let i = 0; i < count; i++) {
 				const m = pageMeasures[i] ?? new El("measure");
@@ -125,5 +282,17 @@ export function joinTrees(trees) {
 		});
 		measures += count;
 	}
+	// ids and default names in score order again (P1, P2, …)
+	const rename = new Map();
+	parts.forEach((part, n) => rename.set(attr(part, "id"), `P${n + 1}`));
+	for (const sp of childrenOf(plist, "score-part")) {
+		const id = rename.get(attr(sp, "id"));
+		const name = childrenOf(sp, "part-name")[0];
+		if (name && /^Part \d+$/.test(name.text ?? "")) {
+			name.text = `Part ${id.slice(1)}`;
+		}
+		sp.set("id", id);
+	}
+	parts.forEach((part) => part.set("id", rename.get(attr(part, "id"))));
 	return root;
 }
