@@ -1516,24 +1516,24 @@ async function downloadMidi() {
 	<div class="score-editor">
 		<div class="credits">
 			<label>
-				Title
-				<input v-model.lazy="omr.title" type="text" placeholder="Untitled" />
+				Titre
+				<input v-model.lazy="omr.title" type="text" placeholder="Sans titre" />
 			</label>
 			<label>
-				Composer
-				<input v-model.lazy="omr.composer" type="text" placeholder="Unknown" />
+				Compositeur
+				<input v-model.lazy="omr.composer" type="text" placeholder="Inconnu" />
 			</label>
 		</div>
 		<div class="toolbar">
 			<span class="summary" :title="`${result.summary.staves} staves in ${result.summary.systems} systems; ${result.summary.changed} corrected from context`">
 				<template v-if="pages.length > 1">{{ pages.length }} pages · </template>
-				{{ result.summary.notes }} notes, {{ result.summary.rests }} rests<template v-if="result.summary.edited"> · {{ result.summary.edited }} edited</template>
+				{{ result.summary.notes }} notes, {{ result.summary.rests }} silences<template v-if="result.summary.edited"> · {{ result.summary.edited }} corrigées</template>
 			</span>
 			<div class="section" aria-label="Edit">
 				<div class="group">
-					<button class="secondary" :disabled="!ops.length" title="Undo (Ctrl+Z)" @click="undo">↶ Undo</button>
-					<button class="secondary" :disabled="!undone.length" title="Redo (Ctrl+Shift+Z)" @click="redo">↷ Redo</button>
-					<button class="secondary" :disabled="!ops.length" title="Undo all edits" @click="resetEdits">Undo all</button>
+					<button class="secondary" :disabled="!ops.length" title="Annuler (Ctrl+Z)" @click="undo">↶ Annuler</button>
+					<button class="secondary" :disabled="!undone.length" title="Rétablir (Ctrl+Maj+Z)" @click="redo">↷ Rétablir</button>
+					<button class="secondary" :disabled="!ops.length" title="Annuler toutes les corrections" @click="resetEdits">Tout annuler</button>
 				</div>
 				<button
 					class="secondary"
@@ -1541,7 +1541,7 @@ async function downloadMidi() {
 					:disabled="!canAdd"
 					@click="toggleAdding"
 				>
-					{{ adding ? "Stop adding" : "+ Add missed notes" }}
+					{{ adding ? "Fin de l'ajout" : "+ Ajouter des notes oubliées" }}
 				</button>
 			</div>
 			<div class="section" aria-label="Download">
@@ -1553,16 +1553,16 @@ async function downloadMidi() {
 				>
 					🎵 Travailler les voix
 				</button>
-				<span class="label">Download</span>
-				<button title="Download MusicXML" @click="downloadMusicXml">MusicXML</button>
-				<button class="secondary" :disabled="result.summary.notes === 0" title="Download MIDI" @click="downloadMidi">MIDI</button>
+				<span class="label">Télécharger</span>
+				<button title="Télécharger le MusicXML" @click="downloadMusicXml">MusicXML</button>
+				<button class="secondary" :disabled="result.summary.notes === 0" title="Télécharger le MIDI" @click="downloadMidi">MIDI</button>
 				<ExportButtons step="score" :music-xml="result.musicXml" :arrows="false" />
 			</div>
 		</div>
 		<div class="status-row">
 			<p class="status-line">
 				<span v-if="editing" class="status">
-					{{ editProgress?.stage === "reading in context" ? "Reading the page again…" : "Updating…" }}
+					{{ editProgress?.stage === "reading in context" ? "Nouvelle lecture de la page…" : "Mise à jour…" }}
 				</span>
 				<span v-else-if="editError" class="error">{{ editError }}</span>
 				<span v-else-if="unplaced" class="status">
@@ -1575,14 +1575,14 @@ async function downloadMidi() {
 				</span>
 				<span v-else-if="pickHint" class="error">{{ pickHint }}</span>
 				<span v-else class="hint">
-					A first draft: click a note, tie, slur, hairpin or dynamic to correct
-					it, or a clef, key, time signature, bracket or part's name.
+					Première lecture : « 🎵 Travailler les voix » pour écouter. Pour corriger, cliquez
+					une note, une liaison, une nuance, une clé, une armure ou une mesure.
 				</span>
 			</p>
 			<div v-if="result.svg.length > 0" class="group zoom" aria-label="Zoom">
-				<button class="secondary" title="Zoom out" :disabled="zoom === ZOOMS[0]" @click="zoomBy(-1)">−</button>
-				<button class="secondary" title="Fit the width" :aria-pressed="zoom === 1" @click="zoom = 1">{{ zoom === 1 ? "Fit" : `${Math.round(zoom * 100)}%` }}</button>
-				<button class="secondary" title="Zoom in" :disabled="zoom === ZOOMS.at(-1)" @click="zoomBy(1)">+</button>
+				<button class="secondary" title="Réduire" :disabled="zoom === ZOOMS[0]" @click="zoomBy(-1)">−</button>
+				<button class="secondary" title="Pleine largeur" :aria-pressed="zoom === 1" @click="zoom = 1">{{ zoom === 1 ? "Ajuster" : `${Math.round(zoom * 100)}%` }}</button>
+				<button class="secondary" title="Agrandir" :disabled="zoom === ZOOMS.at(-1)" @click="zoomBy(1)">+</button>
 			</div>
 		</div>
 		<AddSymbols

@@ -54,7 +54,7 @@ const rect = computed(() => {
 			<rect v-bind="rect" class="mark" :stroke-width="zoom.w / 250" />
 		</svg>
 		<div v-else class="zoom placeholder">
-			Hover or tap a note, tie, slur, hairpin or dynamic on the score to see it on the page.
+			Survolez ou touchez une note de la partition pour la voir sur la page d’origine.
 		</div>
 		<svg
 			class="whole"
