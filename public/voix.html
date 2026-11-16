@@ -235,14 +235,7 @@ const ACCOMP=/piano|orgue|organ|clavier|accomp|pf\.?$|keyboard|harmonium|ped/i;
 const VOCAL=/sop|alt|t[ée]n|bas|bar|voix|voice|chœur|choeur|choir|chor|^s\.?\s?\d?$|^a\.?$|^t\.?$|^b\.?$|s\.?a\.?|t\.?b\.?/i;
 const txt=(el,sel)=>{const x=el.querySelector(sel);return x?x.textContent.trim():null;};
 // titres et noms de portée « vides » produits par la lecture automatique (copista : « Untitled Score », « Part 1 »…)
-const GENERIC_TITLE=/^(untitled( score)?|sans titre|partition sans titre|titre|title|partition|score)$/i;
-// titre lisible tiré du nom de fichier (même règle que la page de lecture, src/photos.js)
-function titreFichier(name){
-  let t=String(name||"").replace(/\.[a-z0-9]{2,8}$/i,"").replace(/_+/g," ").replace(/\s*\(\d+\)\s*$/,"")
-    .replace(/\s*[-–]?\s*(copie|copy)(\s*\d+)?\s*$/i,"").replace(/\s+\d{1,2}$/,"").replace(/\s+/g," ").trim();
-  if(/^(img|image|dsc|dcim|scan|photo|page|pxl|wp|document|doc)[\s-]*\d*$/i.test(t)||/^[\d\s-]+$/.test(t)) return "";
-  return t;
-}
+const GENERIC_TITLE=/^(untitled( score)?|sans titre|titre|title|partition|score)$/i;
 const GENERIC_PART=/^((part|partie|staff|portée|instrument|voice|voix)\s*\d*|p\d+)$/i;
 // Copie du MusicXML pour l'affichage : vrai titre (ou rien) et noms de voix détectés au lieu de « Part 1 ».
 function displayXml(xml, tracks, shownTitle){
@@ -381,7 +374,7 @@ function parseScore(xmlText){
           if(!trackDefs.has(key)) trackDefs.set(key,{key,pid,pname,voice,staff,accomp,order:pi*100+(+voice||0),count:0,lo:127,hi:0,sum:0});
           const td=trackDefs.get(key); td.count++; td.lo=Math.min(td.lo,midi); td.hi=Math.max(td.hi,midi); td.sum+=midi;
           const ties=Array.from(el.querySelectorAll(":scope > tie")).map(x=>x.getAttribute("type"));
-          raw.push({m:mi,t:start,d,midi,key,tieStart:ties.includes("start"),tieStop:ties.includes("stop"),
+          raw.push({m:mi,t:start,d,midi,key,staff,pid,tieStart:ties.includes("start"),tieStop:ties.includes("stop"),
             lyric:txt(el,"lyric > text")});
         }
       }
@@ -391,6 +384,28 @@ function parseScore(xmlText){
   });
   // longueur par défaut si mesure vide
   measInfo.forEach(i=>{ if(!i.len) i.len=i.beats*4/i.beatType; });
+
+  // Deux voix sur une portée (soprano + alto…) qui finissent la mesure ensemble : la lecture n'écrit souvent
+  // la fin commune (note à l'unisson ou silence) que dans une des deux voix. La voix qui s'arrête trop tôt
+  // reçoit cette fin : les notes y sonnent aussi (à l'unisson), et la mesure n'est plus signalée à tort.
+  measInfo.forEach((info,mi)=>{
+    const vd=info.vd||{}; const keys=Object.keys(vd);
+    if(keys.length<2) return;
+    keys.forEach(k=>{
+      const v=vd[k]; if(v.acc || v.d>=v.exp-0.01 || v.d<=0.001) return;
+      const [pid]=k.split("|");
+      const mine=raw.filter(n=>n.m===mi && n.key===k); const staff=mine.length?mine[mine.length-1].staff:null;
+      // une autre voix de la même portée, complète, qui couvre la fin
+      const other=keys.find(o=>o!==k && o.split("|")[0]===pid && !vd[o].acc && Math.abs(vd[o].d-v.exp)<0.01 &&
+        raw.some(n=>n.m===mi && n.key===o && n.staff===staff));
+      if(!other) return;
+      const tail=raw.filter(n=>n.m===mi && n.key===other && n.staff===staff && n.t>=v.d-0.001);
+      // la fin de l'autre voix ne doit pas commencer avant que celle-ci se taise (sinon : vraie note manquante)
+      if(raw.some(n=>n.m===mi && n.key===other && n.t<v.d-0.001 && n.t+n.d>v.d+0.001)) return;
+      tail.forEach(n=>raw.push({...n, key:k, shared:true}));
+      v.d=v.exp; v.filled=true;
+    });
+  });
 
   // voix secondaires très courtes (divisi passager : moins de 15 % des notes de la voix principale de la
   // même partie) : rattachées à la voix principale, où elles sonnent en accord
@@ -1036,14 +1051,12 @@ document.addEventListener("keydown",e=>{
 $("#changeScore").onclick=()=>{ pause(); $("#player").classList.add("hidden"); $("#loader").classList.remove("hidden"); msg(""); Mine.list(); };
 
 /* ---- chargement ---- */
-// fallback : titre à montrer quand la partition n'en porte pas (nom du fichier, titre saisi à la lecture…)
-async function openText(xmlText, fallback){
+async function openText(xmlText){
   pause();
   S=parseScore(xmlText);
   if(!S.events.length) throw new Error("Aucune note trouvée dans ce fichier.");
   P.q=0;
-  const fb=String(fallback||"").trim();
-  $("#title").textContent = !GENERIC_TITLE.test(S.title.trim()) ? S.title : (fb && !GENERIC_TITLE.test(fb) ? fb : "Partition sans titre");
+  $("#title").textContent=S.title;
   const nm=S.measInfo.length;
   $("#meta").innerHTML=[S.composer, nm+" mesures", S.tracks.length+" voix détectées", S.hasRepeats?"<span class='pill'>reprises jouées</span>":""].filter(Boolean).join(" · ");
   $("#from").value=S.measInfo[0].num||1; $("#to").value=S.measInfo[Math.min(3,nm-1)].num||4;
@@ -1069,8 +1082,8 @@ async function openFile(file){
     if(u8[0]===0x50&&u8[1]===0x4b) text=await unzipMxl(buf);
     else if(u8[0]===0x25&&u8[1]===0x50&&u8[2]===0x44&&u8[3]===0x46) throw new Error("C'est un PDF : il faut d'abord le convertir en MusicXML (voir l'aide ci-dessous).");
     else text=decodeText(u8);
-    await openText(text, titreFichier(file.name)); msg("");
-    Mine.save(text, $("#title").textContent);
+    await openText(text); msg("");
+    Mine.save(text, S.title!=="Partition"?S.title:file.name.replace(/\.(musicxml|xml|mxl)$/i,""));
   }catch(e){ console.error(e); msg(e.message||String(e),true); }
 }
 $("#file").onchange=e=>{ if(e.target.files[0]) openFile(e.target.files[0]); e.target.value=""; };
@@ -1089,7 +1102,7 @@ drop.addEventListener("drop",e=>{ const f=e.dataTransfer.files[0]; if(f) openFil
       let text=item.xml;
       if(!text&&item.url){ const r=await fetch(item.url); const buf=await r.arrayBuffer(); const u8=new Uint8Array(buf);
         text=(u8[0]===0x50&&u8[1]===0x4b)?await unzipMxl(buf):decodeText(u8); }
-      await openText(text, item.titre); msg(""); }catch(e){ msg("Impossible d'ouvrir cette partition : "+(e.message||e),true); } };
+      await openText(text); msg(""); }catch(e){ msg("Impossible d'ouvrir cette partition : "+(e.message||e),true); } };
     $("#library").appendChild(b); });
 })();
 /* ---- Mes partitions : les partitions lues restent sur l'appareil (IndexedDB), pour ne pas relire le PDF ---- */
@@ -1128,7 +1141,7 @@ const Mine=(function(){
       const row=document.createElement("div"); row.className="item";
       const o=document.createElement("button"); o.className="open"; o.textContent="♪ "+it.titre;
       o.title=it.titre+(it.mesures?" · "+it.mesures+" mesures":"")+(it.voix?" · "+it.voix+" voix":"");
-      o.onclick=async()=>{ try{ msg("Ouverture…"); await openText(it.xml, it.titre); $("#title").textContent=it.titre; current=it.id;
+      o.onclick=async()=>{ try{ msg("Ouverture…"); await openText(it.xml); $("#title").textContent=it.titre; current=it.id;
         it.date=Date.now(); tx("readwrite",st=>st.put(it)); msg(""); }catch(e){ msg("Impossible d'ouvrir cette partition : "+(e.message||e),true); } };
       const w=document.createElement("span"); w.className="when"; w.textContent=fmt(it.date);
       const d=document.createElement("button"); d.className="del"; d.textContent="✕"; d.title="Retirer de mes partitions";
@@ -1141,10 +1154,7 @@ const Mine=(function(){
 })();
 // renommer : on clique sur le titre, on tape, Entrée ou clic ailleurs
 $("#title").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); e.target.blur(); } });
-let titreAffiche="";
-$("#title").addEventListener("focus",e=>{ titreAffiche=e.target.textContent.trim(); });
-$("#title").addEventListener("blur",e=>{ const t=e.target.textContent.trim(); if(!t) e.target.textContent="Partition sans titre"; Mine.rename(e.target.textContent);
-  if(S && e.target.textContent.trim()!==titreAffiche) renderScore().then(render); });  // le titre renommé apparaît aussi sur la partition
+$("#title").addEventListener("blur",e=>{ const t=e.target.textContent.trim(); if(!t) e.target.textContent="Partition sans titre"; Mine.rename(e.target.textContent); });
 Mine.list();
 window.__test={get S(){return S;},openText,P,curQ,Mine};
 /* ---- partition transmise par la page de lecture (même site, stockage local) ---- */
@@ -1153,7 +1163,7 @@ window.__test={get S(){return S;},openText,P,curQ,Mine};
   try{ xml=localStorage.getItem("voix-musicxml"); titre=localStorage.getItem("voix-titre")||"";
        localStorage.removeItem("voix-musicxml"); localStorage.removeItem("voix-titre"); }catch(e){}
   if(!xml) return;
-  try{ await openText(xml, titre);
+  try{ await openText(xml); if(titre && (!S.title || S.title==="Partition")) $("#title").textContent=titre;
        Mine.save(xml, $("#title").textContent); }
   catch(e){ msg("La partition reçue n'a pas pu être ouverte : "+(e.message||e),true); }
 })();
