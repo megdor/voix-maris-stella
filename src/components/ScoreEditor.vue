@@ -1992,7 +1992,7 @@ async function downloadMidi() {
 				/>
 			</div>
 		</div>
-		<p v-else class="hint">Aucune note trouvée : rien à afficher.</p>
+		<p v-else class="hint">Aucune note reconnue. L’outil lit la notation moderne (portées de 5 lignes) : le grégorien en notation carrée n’est pas pris en charge. Pour une partition moderne, vérifiez à l’étape « 2 · Pages » que les pages sont nettes et lisibles.</p>
 	</div>
 </template>
 
