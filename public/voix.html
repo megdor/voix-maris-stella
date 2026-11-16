@@ -210,6 +210,33 @@ const STEP={C:0,D:2,E:4,F:5,G:7,A:9,B:11};
 const ACCOMP=/piano|orgue|organ|clavier|accomp|pf\.?$|keyboard|harmonium|ped/i;
 const VOCAL=/sop|alt|t[ée]n|bas|bar|voix|voice|chœur|choeur|choir|chor|^s\.?\s?\d?$|^a\.?$|^t\.?$|^b\.?$|s\.?a\.?|t\.?b\.?/i;
 const txt=(el,sel)=>{const x=el.querySelector(sel);return x?x.textContent.trim():null;};
+// titres et noms de portée « vides » produits par la lecture automatique (copista : « Untitled Score », « Part 1 »…)
+const GENERIC_TITLE=/^(untitled( score)?|sans titre|titre|title|partition|score)$/i;
+const GENERIC_PART=/^((part|partie|staff|portée|instrument|voice|voix)\s*\d*|p\d+)$/i;
+// Copie du MusicXML pour l'affichage : vrai titre (ou rien) et noms de voix détectés au lieu de « Part 1 ».
+function displayXml(xml, tracks, shownTitle){
+  try{
+    const doc=new DOMParser().parseFromString(xml,"application/xml");
+    if(doc.querySelector("parsererror")) return xml;
+    const root=doc.documentElement;
+    const good=shownTitle && !GENERIC_TITLE.test(shownTitle.trim()) ? shownTitle.trim() : "";
+    root.querySelectorAll("work > work-title, movement-title").forEach(e=>{ e.textContent=good; });
+    if(!root.querySelector("work > work-title, movement-title") && good){
+      const w=doc.createElement("movement-title"); w.textContent=good; root.insertBefore(w, root.firstElementChild); }
+    root.querySelectorAll("credit").forEach(c=>{ const w=c.querySelector("credit-words");
+      if(w && GENERIC_TITLE.test(w.textContent.trim())) c.remove(); });
+    root.querySelectorAll("part-list > score-part").forEach(sp=>{
+      const pid=sp.getAttribute("id"); const pn=sp.querySelector("part-name");
+      const cur=pn?pn.textContent.trim():"";
+      if(cur && !GENERIC_PART.test(cur)) return;
+      const names=[...new Set(tracks.filter(t=>t.key.startsWith(pid+"|")).map(t=>t.name.replace(/ — voix \d+$/,"").trim()).filter(Boolean))];
+      const label=names.join(" / ");
+      if(pn) pn.textContent=label; else if(label){ const e=doc.createElement("part-name"); e.textContent=label; sp.insertBefore(e, sp.firstElementChild); }
+      const ab=sp.querySelector("part-abbreviation"); if(ab && GENERIC_PART.test(ab.textContent.trim())) ab.textContent="";
+    });
+    return new XMLSerializer().serializeToString(doc);
+  }catch(e){ return xml; }
+}
 const kids=(el,name)=>Array.from(el.children).filter(c=>c.tagName===name);
 
 function parseScore(xmlText){
@@ -218,8 +245,9 @@ function parseScore(xmlText){
   const root=doc.documentElement;
   if(root.tagName==="score-timewise") throw new Error("Format « timewise » non pris en charge : réexportez depuis MuseScore.");
   if(root.tagName!=="score-partwise") throw new Error("Ce fichier ne ressemble pas à une partition MusicXML.");
-  const title = txt(root,"work > work-title")||txt(root,"movement-title")||
-    (Array.from(root.querySelectorAll("credit-words")).sort((a,b)=>(+b.getAttribute("font-size")||0)-(+a.getAttribute("font-size")||0))[0]||{}).textContent||"Partition";
+  const realTitle=t=>(t&&!GENERIC_TITLE.test(t.trim()))?t.trim():null;
+  const title = realTitle(txt(root,"work > work-title"))||realTitle(txt(root,"movement-title"))||
+    realTitle((Array.from(root.querySelectorAll("credit-words")).sort((a,b)=>(+b.getAttribute("font-size")||0)-(+a.getAttribute("font-size")||0))[0]||{}).textContent)||"Partition";
   const composer = (Array.from(root.querySelectorAll("identification creator")).find(c=>c.getAttribute("type")==="composer")||{}).textContent||"";
   const partNames={};
   root.querySelectorAll("part-list > score-part").forEach(sp=>{partNames[sp.getAttribute("id")]=(txt(sp,"part-name")||sp.getAttribute("id")).replace(/\s+/g," ");});
@@ -740,7 +768,7 @@ async function renderScore(){
   try{
     await loadOsmdLib();
     osmd=new opensheetmusicdisplay.OpenSheetMusicDisplay("osmd",{autoResize:true,backend:"svg",drawTitle:true,drawPartNames:true,followCursor:false});
-    await osmd.load(S.xml); osmd.render();
+    await osmd.load(displayXml(S.xml, S.tracks, $("#title").textContent)); osmd.render();
     osmd.cursor.show();
     // inventaire des positions du curseur : (mesure, position en noires dans la mesure)
     osmdSteps=[]; const c=osmd.cursor; c.reset(); let guard=0;
