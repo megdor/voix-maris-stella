@@ -35,6 +35,11 @@
   #drop strong{color:var(--accent)}
   #library{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
   #library button{background:#f2ece2}
+  #choeurWrap{margin-top:14px}
+  #choeurFiltre{width:100%;box-sizing:border-box;margin-top:8px;padding:8px 10px;border:1px solid #d9cfbf;border-radius:8px;font:inherit}
+  #choeur{display:flex;flex-direction:column;gap:6px;margin-top:8px;max-height:320px;overflow:auto}
+  #choeur button{text-align:left;background:#f2ece2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #choeurEtat{font-size:12px;color:var(--muted);margin-top:6px}
   .hidden{display:none!important}
   #title{font-family:"Cormorant Garamond",Georgia,serif;font-size:24px;font-weight:600;margin:0}
   #title[contenteditable]{outline:none;border-bottom:1px dashed transparent;cursor:text}
@@ -109,6 +114,12 @@
       <div><strong>Déposez une partition ici</strong> ou <label class="btn" style="display:inline-flex">choisir un fichier<input id="file" type="file" accept=".musicxml,.xml,.mxl" hidden></label></div>
       <div class="muted" style="margin-top:6px;font-size:13px">Formats acceptés : MusicXML (.musicxml, .xml) et MusicXML compressé (.mxl)</div>
       <div style="margin-top:14px"><a class="btn" href="./" style="text-decoration:none;background:#1f3a5f;color:#fff;border-color:#1f3a5f">📄 J'ai un PDF ou une photo : lire la partition</a></div>
+    </div>
+    <div id="choeurWrap" class="hidden">
+      <div class="muted" style="font-size:13px">Bibliothèque du chœur — partitions déjà travaillées par les membres :</div>
+      <input id="choeurFiltre" type="search" placeholder="Rechercher une œuvre…" class="hidden" autocomplete="off">
+      <div id="choeur"></div>
+      <div id="choeurEtat"></div>
     </div>
     <div id="mineWrap" class="hidden">
       <div class="muted" style="margin-top:14px;font-size:13px">Mes partitions (gardées sur cet appareil, rien n'est envoyé) :</div>
@@ -235,7 +246,14 @@ const ACCOMP=/piano|orgue|organ|clavier|accomp|pf\.?$|keyboard|harmonium|ped/i;
 const VOCAL=/sop|alt|t[ée]n|bas|bar|voix|voice|chœur|choeur|choir|chor|^s\.?\s?\d?$|^a\.?$|^t\.?$|^b\.?$|s\.?a\.?|t\.?b\.?/i;
 const txt=(el,sel)=>{const x=el.querySelector(sel);return x?x.textContent.trim():null;};
 // titres et noms de portée « vides » produits par la lecture automatique (copista : « Untitled Score », « Part 1 »…)
-const GENERIC_TITLE=/^(untitled( score)?|sans titre|titre|title|partition|score)$/i;
+const GENERIC_TITLE=/^(untitled( score)?|sans titre|partition sans titre|titre|title|partition|score)$/i;
+// titre lisible tiré du nom de fichier (même règle que la page de lecture, src/photos.js)
+function titreFichier(name){
+  let t=String(name||"").replace(/\.[a-z0-9]{2,8}$/i,"").replace(/_+/g," ").replace(/\s*\(\d+\)\s*$/,"")
+    .replace(/\s*[-–]?\s*(copie|copy)(\s*\d+)?\s*$/i,"").replace(/\s+\d{1,2}$/,"").replace(/\s+/g," ").trim();
+  if(/^(img|image|dsc|dcim|scan|photo|page|pxl|wp|document|doc)[\s-]*\d*$/i.test(t)||/^[\d\s-]+$/.test(t)) return "";
+  return t;
+}
 const GENERIC_PART=/^((part|partie|staff|portée|instrument|voice|voix)\s*\d*|p\d+)$/i;
 // Copie du MusicXML pour l'affichage : vrai titre (ou rien) et noms de voix détectés au lieu de « Part 1 ».
 function displayXml(xml, tracks, shownTitle){
@@ -1052,12 +1070,14 @@ document.addEventListener("keydown",e=>{
 $("#changeScore").onclick=()=>{ pause(); $("#player").classList.add("hidden"); $("#loader").classList.remove("hidden"); msg(""); Mine.list(); };
 
 /* ---- chargement ---- */
-async function openText(xmlText){
+// fallback : titre à montrer quand la partition n'en porte pas (nom du fichier, titre saisi à la lecture…)
+async function openText(xmlText, fallback){
   pause();
   S=parseScore(xmlText);
   if(!S.events.length) throw new Error("Aucune note trouvée dans ce fichier.");
   P.q=0;
-  $("#title").textContent=S.title;
+  const fb=String(fallback||"").trim();
+  $("#title").textContent = !GENERIC_TITLE.test(S.title.trim()) ? S.title : (fb && !GENERIC_TITLE.test(fb) ? fb : "Partition sans titre");
   const nm=S.measInfo.length;
   $("#meta").innerHTML=[S.composer, nm+" mesures", S.tracks.length+" voix détectées", S.hasRepeats?"<span class='pill'>reprises jouées</span>":""].filter(Boolean).join(" · ");
   $("#from").value=S.measInfo[0].num||1; $("#to").value=S.measInfo[Math.min(3,nm-1)].num||4;
@@ -1083,8 +1103,9 @@ async function openFile(file){
     if(u8[0]===0x50&&u8[1]===0x4b) text=await unzipMxl(buf);
     else if(u8[0]===0x25&&u8[1]===0x50&&u8[2]===0x44&&u8[3]===0x46) throw new Error("C'est un PDF : il faut d'abord le convertir en MusicXML (voir l'aide ci-dessous).");
     else text=decodeText(u8);
-    await openText(text); msg("");
-    Mine.save(text, S.title!=="Partition"?S.title:file.name.replace(/\.(musicxml|xml|mxl)$/i,""));
+    await openText(text, titreFichier(file.name)); msg("");
+    Mine.save(text, $("#title").textContent);
+    Choeur.deposer(text, $("#title").textContent);
   }catch(e){ console.error(e); msg(e.message||String(e),true); }
 }
 $("#file").onchange=e=>{ if(e.target.files[0]) openFile(e.target.files[0]); e.target.value=""; };
@@ -1103,8 +1124,67 @@ drop.addEventListener("drop",e=>{ const f=e.dataTransfer.files[0]; if(f) openFil
       let text=item.xml;
       if(!text&&item.url){ const r=await fetch(item.url); const buf=await r.arrayBuffer(); const u8=new Uint8Array(buf);
         text=(u8[0]===0x50&&u8[1]===0x4b)?await unzipMxl(buf):decodeText(u8); }
-      await openText(text); msg(""); }catch(e){ msg("Impossible d'ouvrir cette partition : "+(e.message||e),true); } };
+      await openText(text, item.titre); msg(""); }catch(e){ msg("Impossible d'ouvrir cette partition : "+(e.message||e),true); } };
     $("#library").appendChild(b); });
+})();
+/* ---- Bibliothèque du chœur (réservée aux membres) ----
+   L'espace membre du site ouvre l'outil avec un laissez-passer signé (dans le « # » de l'adresse, valable 12 h).
+   Sans lui, rien ne s'affiche et rien n'est envoyé. Avec lui : liste des partitions déjà travaillées par les
+   membres, et chaque partition ouverte ici y est ajoutée automatiquement (une œuvre déjà présente n'est pas doublée). */
+const Choeur=(function(){
+  const CLE="voix-biblio"; let passe=null, liste=[], depuisBiblio=false;
+  try{
+    const m=/[#&]b=([^&]+)/.exec(location.hash);
+    if(m){ const t=decodeURIComponent(m[1]).replace(/-/g,"+").replace(/_/g,"/");
+      const j=JSON.parse(decodeURIComponent(escape(atob(t))));
+      if(j&&j.api&&j.exp&&j.sig){ passe=j; try{ localStorage.setItem(CLE,JSON.stringify(j)); }catch(e){} }
+      history.replaceState(null,"",location.pathname+location.search); }
+  }catch(e){ console.warn("Bibliothèque : laissez-passer illisible",e); }
+  if(!passe){ try{ passe=JSON.parse(localStorage.getItem(CLE)||"null"); }catch(e){} }
+  if(passe && !(Number(passe.exp)>Date.now()+60000)){ passe=null; try{ localStorage.removeItem(CLE); }catch(e){} }
+  const actif=()=>!!passe && Number(passe.exp)>Date.now();
+  const etat=t=>{ const e=$("#choeurEtat"); if(e) e.textContent=t||""; };
+  const url=q=>passe.api+(passe.api.indexOf("?")<0?"?":"&")+Object.entries(Object.assign({},q,{exp:passe.exp,sig:passe.sig}))
+    .map(([k,v])=>k+"="+encodeURIComponent(v)).join("&");
+  async function get(q){ const r=await fetch(url(q)); const d=await r.json(); if(!d.ok) throw new Error(d.erreur||"Bibliothèque indisponible"); return d; }
+  const norm=t=>(t||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+  function afficher(){
+    const box=$("#choeur"); box.innerHTML=""; const f=norm($("#choeurFiltre").value.trim());
+    const vus=liste.filter(it=>!f||norm(it.titre).includes(f));
+    vus.forEach(it=>{ const b=document.createElement("button"); b.textContent="♪ "+it.titre; b.title=it.titre;
+      b.onclick=()=>ouvrir(it); box.appendChild(b); });
+    if(!liste.length) etat("Encore vide : chaque partition que vous ouvrez ici y sera ajoutée pour tout le chœur.");
+    else if(!vus.length) etat("Aucune œuvre ne correspond.");
+    else etat(liste.length+" œuvre"+(liste.length>1?"s":""));
+  }
+  async function charger(){
+    if(!actif()) return;
+    $("#choeurWrap").classList.remove("hidden"); etat("Chargement de la bibliothèque…");
+    try{ const d=await get({biblio:"liste"}); liste=d.partitions||[];
+      $("#choeurFiltre").classList.toggle("hidden",liste.length<8); afficher(); }
+    catch(e){ etat(/refus/i.test(e.message)?"Accès expiré : rouvrez l'outil depuis votre espace membre.":"Bibliothèque momentanément indisponible."); }
+  }
+  async function ouvrir(it){
+    try{ msg("Ouverture de « "+it.titre+" »…"); const d=await get({biblio:"fichier",id:it.id});
+      depuisBiblio=true; await openText(d.xml, d.titre); depuisBiblio=false;
+      $("#title").textContent=d.titre; Mine.save(d.xml, d.titre); msg(""); }
+    catch(e){ depuisBiblio=false; msg("Impossible d'ouvrir cette partition : "+(e.message||e),true); }
+  }
+  // ajout automatique : appelé après chaque ouverture réussie (fichier, lecture PDF/photo, « Mes partitions »)
+  async function deposer(xml, titre){
+    if(!actif()||depuisBiblio||!xml) return;
+    titre=(titre||"").trim();
+    if(!titre||GENERIC_TITLE.test(titre)||/^partition sans titre$/i.test(titre)) return;  // on attend un vrai titre
+    if(liste.some(x=>norm(x.titre)===norm(titre))) return;
+    try{
+      const r=await fetch(passe.api,{method:"POST",body:JSON.stringify({action:"biblioDepot",exp:passe.exp,sig:passe.sig,titre,xml})});
+      const d=await r.json();
+      if(d.ok&&d.ajout){ liste.push({id:d.id,titre:d.titre}); liste.sort((a,b)=>a.titre.localeCompare(b.titre,"fr")); afficher();
+        etat("« "+d.titre+" » a été ajoutée à la bibliothèque du chœur."); }
+    }catch(e){ console.warn("Bibliothèque : dépôt impossible",e); }
+  }
+  $("#choeurFiltre").addEventListener("input",afficher);
+  return {charger,deposer,get actif(){return actif();}};
 })();
 /* ---- Mes partitions : les partitions lues restent sur l'appareil (IndexedDB), pour ne pas relire le PDF ---- */
 const Mine=(function(){
@@ -1142,7 +1222,7 @@ const Mine=(function(){
       const row=document.createElement("div"); row.className="item";
       const o=document.createElement("button"); o.className="open"; o.textContent="♪ "+it.titre;
       o.title=it.titre+(it.mesures?" · "+it.mesures+" mesures":"")+(it.voix?" · "+it.voix+" voix":"");
-      o.onclick=async()=>{ try{ msg("Ouverture…"); await openText(it.xml); $("#title").textContent=it.titre; current=it.id;
+      o.onclick=async()=>{ try{ msg("Ouverture…"); await openText(it.xml, it.titre); $("#title").textContent=it.titre; current=it.id; Choeur.deposer(it.xml, it.titre);
         it.date=Date.now(); tx("readwrite",st=>st.put(it)); msg(""); }catch(e){ msg("Impossible d'ouvrir cette partition : "+(e.message||e),true); } };
       const w=document.createElement("span"); w.className="when"; w.textContent=fmt(it.date);
       const d=document.createElement("button"); d.className="del"; d.textContent="✕"; d.title="Retirer de mes partitions";
@@ -1155,8 +1235,13 @@ const Mine=(function(){
 })();
 // renommer : on clique sur le titre, on tape, Entrée ou clic ailleurs
 $("#title").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); e.target.blur(); } });
-$("#title").addEventListener("blur",e=>{ const t=e.target.textContent.trim(); if(!t) e.target.textContent="Partition sans titre"; Mine.rename(e.target.textContent); });
+let titreAffiche="";
+$("#title").addEventListener("focus",e=>{ titreAffiche=e.target.textContent.trim(); });
+$("#title").addEventListener("blur",e=>{ const t=e.target.textContent.trim(); if(!t) e.target.textContent="Partition sans titre"; Mine.rename(e.target.textContent);
+  if(S && e.target.textContent.trim()!==titreAffiche){ renderScore().then(render);
+    if(GENERIC_TITLE.test(titreAffiche)||/^partition sans titre$/i.test(titreAffiche)) Choeur.deposer(S.xml, e.target.textContent); } });  // le titre renommé apparaît aussi sur la partition
 Mine.list();
+Choeur.charger();
 window.__test={get S(){return S;},openText,P,curQ,Mine};
 /* ---- partition transmise par la page de lecture (même site, stockage local) ---- */
 (async function(){
@@ -1164,8 +1249,8 @@ window.__test={get S(){return S;},openText,P,curQ,Mine};
   try{ xml=localStorage.getItem("voix-musicxml"); titre=localStorage.getItem("voix-titre")||"";
        localStorage.removeItem("voix-musicxml"); localStorage.removeItem("voix-titre"); }catch(e){}
   if(!xml) return;
-  try{ await openText(xml); if(titre && (!S.title || S.title==="Partition")) $("#title").textContent=titre;
-       Mine.save(xml, $("#title").textContent); }
+  try{ await openText(xml, titre);
+       Mine.save(xml, $("#title").textContent); Choeur.deposer(xml, $("#title").textContent); }
   catch(e){ msg("La partition reçue n'a pas pu être ouverte : "+(e.message||e),true); }
 })();
 // téléphone : ouvrir/fermer les réglages secondaires de la barre de lecture
