@@ -43,21 +43,24 @@ export async function pagesFromPdf(file) {
 
 /** Images (Blobs or Files) as addImages takes them, in order. PDF files give one image per page. */
 export async function imagesFromPhotos(files) {
+	// Une page de PDF est déjà à plat : pas de recherche des coins (pensée pour les photos),
+	// qui peut recadrer de travers une page de partition et couper le début des portées.
 	const photos = [];
 	for (const f of files) {
 		if (isPdf(f)) {
-			photos.push(...(await pagesFromPdf(f)));
+			for (const b of await pagesFromPdf(f)) photos.push({ blob: b, flat: true });
 		} else {
-			photos.push(f);
+			photos.push({ blob: f, flat: false });
 		}
 	}
 	const images = [];
-	for (const photo of photos) {
+	for (const { blob: photo, flat } of photos) {
 		const bitmap = await createImageBitmap(photo);
 		images.push({
 			image: imageFromSource(bitmap, bitmap.width, bitmap.height),
 			url: URL.createObjectURL(photo),
 			photo,
+			flat,
 		});
 		bitmap.close();
 	}

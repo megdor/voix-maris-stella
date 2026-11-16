@@ -180,7 +180,7 @@ export function useOmr() {
 			return;
 		}
 		resetResult();
-		const added = images.map(({ image, url, photo }) =>
+		const added = images.map(({ image, url, photo, flat }) =>
 			reactive({
 				id: ++nextPageId,
 				key: crypto.randomUUID(), // its name in the saved score
@@ -194,7 +194,7 @@ export function useOmr() {
 				cleaning: strength.value,
 				strength: strength.value,
 				detectedQuad: null,
-				captureState: "detecting",
+				captureState: flat ? "flat" : "detecting",
 				captureError: null,
 				pageImage: null,
 				pageUrl: null,
@@ -205,7 +205,8 @@ export function useOmr() {
 		currentIndex.value = pages.value.length;
 		pages.value = [...pages.value, ...added];
 		for (const p of added) {
-			detecting = detecting.then(() => detectCorners(p));
+			// page de PDF : utilisée entière, sans recadrage automatique
+			detecting = detecting.then(() => (p.captureState === "flat" ? refreshPage(p) : detectCorners(p)));
 		}
 	}
 
