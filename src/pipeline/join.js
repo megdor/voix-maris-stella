@@ -127,6 +127,93 @@ function unlike(a, b) {
 }
 
 const SKIP_OLD = 25; // a part of the score with nothing on this page
+const PAIR = 5; // two staves read as two parts, put back together
+
+/** What two one-staff parts look like as one part on two staves. */
+function pairSig(a, b) {
+	const clefs = new Map([["1", a.clefs.get("1") ?? null], ["2", b.clefs.get("1") ?? null]].filter(([, v]) => v));
+	const means = [a.mean, b.mean].filter((m) => m !== null);
+	return { staves: 2, clefs, mean: means.length ? means.reduce((x, y) => x + y, 0) / means.length : null };
+}
+
+/** Where a measure's children end (in divisions): its notes, backups and forwards. */
+function endOf(measure) {
+	let t = 0;
+	for (const el of measure.children) {
+		const d = Number(childrenOf(el, "duration")[0]?.text ?? 0);
+		if (el.tag === "note" && !childrenOf(el, "chord").length && !childrenOf(el, "grace").length) {
+			t += d;
+		} else if (el.tag === "backup") {
+			t -= d;
+		} else if (el.tag === "forward") {
+			t += d;
+		}
+	}
+	return t;
+}
+
+const AFTER_STAFF = new Set(["beam", "notations", "lyric", "play", "listen"]);
+/** A copy of a note (or forward) put on staff `staff`, its voice moved by `shift`. */
+function onStaff(el, staff, shift) {
+	const c = clone(el);
+	c.children = c.children.filter((k) => k.tag !== "staff");
+	const v = c.children.find((k) => k.tag === "voice");
+	if (v && /^\d+$/.test(v.text ?? "")) {
+		v.text = String(Number(v.text) + shift);
+	}
+	const st = new El("staff", {}, staff);
+	const at = c.children.findIndex((k) => AFTER_STAFF.has(k.tag));
+	if (at < 0) {
+		c.children.push(st);
+	} else {
+		c.children.splice(at, 0, st);
+	}
+	return c;
+}
+
+/** Two one-staff parts' measures as the measures of one part on two staves. */
+function pairMeasures(upper, lower) {
+	const A = childrenOf(upper, "measure");
+	const B = childrenOf(lower, "measure");
+	const n = Math.max(A.length, B.length);
+	const out = [];
+	for (let i = 0; i < n; i++) {
+		const m = A[i] ? clone(A[i]) : new El("measure");
+		for (const attrs of childrenOf(m, "attributes")) {
+			for (const c of childrenOf(attrs, "clef")) {
+				c.set("number", 1);
+			}
+		}
+		const b = B[i];
+		if (b && b.children.some((c) => c.tag === "note" || c.tag === "attributes")) {
+			const back = endOf(m);
+			if (back > 0) {
+				m.children.push(new El("backup"));
+				m.children.at(-1).sub("duration", back);
+			}
+			for (const el of b.children) {
+				if (el.tag === "note" || el.tag === "forward") {
+					m.children.push(onStaff(el, 2, 4));
+				} else if (el.tag === "backup") {
+					m.children.push(clone(el));
+				} else if (el.tag === "attributes") {
+					const clefs = childrenOf(el, "clef").map((c) => {
+						const k = clone(c);
+						k.set("number", 2);
+						return k;
+					});
+					if (clefs.length) {
+						const a = new El("attributes");
+						a.children = clefs;
+						m.children.push(a);
+					}
+				}
+			}
+		}
+		out.push(m);
+	}
+	return out;
+}
 const NEW_PART = 40; // a part first met on this page
 
 /**
@@ -160,6 +247,15 @@ function matchParts(old, page) {
 				cost[i][j + 1] = c + NEW_PART;
 				move[i][j + 1] = "new";
 			}
+			// two one-staff parts of the page = the two staves of a part (a piano
+			// whose brace was not seen on this page)
+			if (i < I && j + 1 < J && old[i].staves === 2 && page[j].staves === 1 && page[j + 1].staves === 1) {
+				const v = c + PAIR + unlike(old[i], pairSig(page[j], page[j + 1]));
+				if (v < cost[i + 1][j + 2]) {
+					cost[i + 1][j + 2] = v;
+					move[i + 1][j + 2] = "pair";
+				}
+			}
 		}
 	}
 	// back from the end: for each page part, its score part, or where a new one goes
@@ -172,6 +268,11 @@ function matchParts(old, page) {
 			out[j - 1] = { to: i - 1 };
 			i--;
 			j--;
+		} else if (mv === "pair") {
+			out[j - 2] = { to: i - 1, pair: j - 1 };
+			out[j - 1] = { paired: true };
+			i--;
+			j -= 2;
 		} else if (mv === "skip") {
 			i--;
 		} else {
@@ -276,7 +377,7 @@ export function joinTrees(trees) {
 		plan.forEach((p, j) => {
 			if ("to" in p) {
 				owner[j] = p.to;
-			} else {
+			} else if (!p.paired) {
 				fresh.push([j, p.before]);
 			}
 		});
@@ -318,12 +419,16 @@ export function joinTrees(trees) {
 		);
 		parts.forEach((part, n) => {
 			const j = pageOf.get(part);
-			if (j !== undefined && pageSigs[j].mean !== null) {
-				sigs[n] = pageSigs[j]; // its look on its latest page
+			const pairWith = j !== undefined ? plan[j].pair : undefined;
+			const sig = j === undefined ? null : pairWith !== undefined ? pairSig(pageSigs[j], pageSigs[pairWith]) : pageSigs[j];
+			if (sig && sig.mean !== null) {
+				sigs[n] = sig; // its look on its latest page
 			}
-			const pageMeasures = j !== undefined
-				? childrenOf(pageParts[j], "measure").map(clone)
-				: [];
+			const pageMeasures = j === undefined
+				? []
+				: pairWith !== undefined
+					? pairMeasures(pageParts[j], pageParts[pairWith])
+					: childrenOf(pageParts[j], "measure").map(clone);
 			for (let i = 0; i < count; i++) {
 				const m = pageMeasures[i] ?? new El("measure");
 				if (i === 0) {
