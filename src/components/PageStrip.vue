@@ -39,7 +39,7 @@ const omr = useOmrState();
 				title="Avancer cette page"
 				@click="omr.movePage(omr.currentIndex, -1)"
 			>
-				◀ Earlier
+				◀ Avant
 			</button>
 			<button
 				class="secondary"
@@ -47,7 +47,7 @@ const omr = useOmrState();
 				title="Reculer cette page"
 				@click="omr.movePage(omr.currentIndex, 1)"
 			>
-				Later ▶
+				Après ▶
 			</button>
 			<button
 				class="secondary"

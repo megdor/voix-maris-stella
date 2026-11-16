@@ -17,7 +17,8 @@ const omr = useOmrState();
 			@commit="omr.onCornersCommit"
 		/>
 		<figcaption>
-			<template v-if="omr.page.captureState === 'detecting'">Recherche de la page…</template>
+			<template v-if="omr.page.captureState === 'flat'">Page de PDF, lue entière. Si besoin, déplacez les coins pour recadrer.</template>
+			<template v-else-if="omr.page.captureState === 'detecting'">Recherche de la page…</template>
 			<template v-else-if="omr.page.captureState === 'found'">Page trouvée. Déplacez les coins pour ajuster si besoin.</template>
 			<template v-else-if="omr.page.captureState === 'not-found'">Page non trouvée : placez les coins sur les coins de la page.</template>
 			<template v-else-if="omr.page.captureState === 'error'">Détection de la page indisponible ({{ omr.page.captureError }}) : placez les coins sur les coins de la page.</template>
