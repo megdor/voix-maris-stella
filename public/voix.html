@@ -476,7 +476,24 @@ function accompParts(parts, partNames){
   const full=multi.filter(i=>!sparse[i]);
   const A=full.length?full[full.length-1]:(multi.length?multi[multi.length-1]:-1);
   if(A>0) for(let i=A;i<parts.length;i++) if(!isVocal(i)) set.add(i);
+  // Le contenu trahit le piano même quand la mise en page ne le montre pas (accolade non lue : ses deux
+  // portées arrivent comme deux parties d'une portée) : accords de 4 sons et plus, accords de 3 sons sur une
+  // octave, longues suites d'octaves (main gauche) — ce qu'une portée de chœur n'écrit pas, même à 3 voix.
+  parts.forEach((p,i)=>{ if(set.has(i) || isVocal(i)) return; if(pianoLike(p)) set.add(i); });
   return set;
+}
+function pianoLike(part){
+  const STEP={C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+  let groups=0, big=0, wide=0, oct=0, cur=null;
+  const close=()=>{ if(!cur||!cur.length) return; groups++; const span=Math.max(...cur)-Math.min(...cur);
+    if(cur.length>=4) big++; else if(cur.length===3 && span>=12) wide++; else if(cur.length===2 && span===12) oct++; };
+  part.querySelectorAll("note").forEach(n=>{
+    const pt=n.querySelector("pitch"); const isChord=!!n.querySelector("chord");
+    if(!isChord){ close(); cur=[]; }
+    if(pt && cur) cur.push(12*(+txt(pt,"octave")+1)+(STEP[txt(pt,"step")]||0)+Math.round(+(txt(pt,"alter")||0)));
+  });
+  close();
+  return groups>=12 && (big/groups>=0.05 || wide/groups>=0.10 || oct/groups>=0.30);
 }
 
 // Plusieurs voix écrites en accords sur une même portée (ex. 3 voix en accords) :
