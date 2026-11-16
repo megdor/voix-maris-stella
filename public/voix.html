@@ -37,6 +37,14 @@
   #library button{background:#f2ece2}
   .hidden{display:none!important}
   #title{font-family:"Cormorant Garamond",Georgia,serif;font-size:24px;font-weight:600;margin:0}
+  #title[contenteditable]{outline:none;border-bottom:1px dashed transparent;cursor:text}
+  #title[contenteditable]:hover,#title[contenteditable]:focus{border-bottom-color:var(--line)}
+  #mine{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+  #mine .item{display:flex;gap:6px;align-items:center}
+  #mine .item .open{flex:1;text-align:left;background:#f2ece2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #mine .item .when{font-size:12px;color:var(--muted);white-space:nowrap}
+  #mine .item .del{padding:4px 9px}
+  #mine .item .del.sure{background:#b3261e;border-color:#b3261e;color:#fff}
   /* mixer */
   #tracks{display:grid;gap:8px;margin-top:10px}
   .trk{display:grid;grid-template-columns:14px minmax(120px,1.4fr) auto auto auto minmax(90px,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:#fff}
@@ -102,6 +110,10 @@
       <div class="muted" style="margin-top:6px;font-size:13px">Formats acceptés : MusicXML (.musicxml, .xml) et MusicXML compressé (.mxl)</div>
       <div style="margin-top:14px"><a class="btn" href="./" style="text-decoration:none;background:#1f3a5f;color:#fff;border-color:#1f3a5f">📄 J'ai un PDF ou une photo : lire la partition</a></div>
     </div>
+    <div id="mineWrap" class="hidden">
+      <div class="muted" style="margin-top:14px;font-size:13px">Mes partitions (gardées sur cet appareil, rien n'est envoyé) :</div>
+      <div id="mine"></div>
+    </div>
     <div id="libWrap" class="hidden">
       <div class="muted" style="margin-top:14px;font-size:13px">Partitions du chœur :</div>
       <div id="library"></div>
@@ -121,7 +133,7 @@
     <div class="card">
       <div class="row" style="justify-content:space-between">
         <div>
-          <p id="title"></p>
+          <p id="title" contenteditable="plaintext-only" spellcheck="false" title="Cliquez pour renommer cette partition"></p>
           <div class="muted" id="meta" style="font-size:13px"></div>
         </div>
         <div class="row">
@@ -958,9 +970,9 @@ document.addEventListener("keydown",e=>{
   if(!S || $("#player").classList.contains("hidden") || e.code!=="Space") return;
   const tg=e.target, tag=tg.tagName;
   // ne pas détourner l'espace quand on écrit, ni quand un bouton / une liste a le focus (sinon double action)
-  if(tag==="TEXTAREA"||tag==="SELECT"||tag==="BUTTON"||tag==="SUMMARY"||(tag==="INPUT"&&!["range","checkbox"].includes(tg.type))) return;
+  if(tg.isContentEditable||tag==="TEXTAREA"||tag==="SELECT"||tag==="BUTTON"||tag==="SUMMARY"||(tag==="INPUT"&&!["range","checkbox"].includes(tg.type))) return;
   e.preventDefault(); $("#play").click(); });
-$("#changeScore").onclick=()=>{ pause(); $("#player").classList.add("hidden"); $("#loader").classList.remove("hidden"); msg(""); };
+$("#changeScore").onclick=()=>{ pause(); $("#player").classList.add("hidden"); $("#loader").classList.remove("hidden"); msg(""); Mine.list(); };
 
 /* ---- chargement ---- */
 async function openText(xmlText){
@@ -995,6 +1007,7 @@ async function openFile(file){
     else if(u8[0]===0x25&&u8[1]===0x50&&u8[2]===0x44&&u8[3]===0x46) throw new Error("C'est un PDF : il faut d'abord le convertir en MusicXML (voir l'aide ci-dessous).");
     else text=decodeText(u8);
     await openText(text); msg("");
+    Mine.save(text, S.title!=="Partition"?S.title:file.name.replace(/\.(musicxml|xml|mxl)$/i,""));
   }catch(e){ console.error(e); msg(e.message||String(e),true); }
 }
 $("#file").onchange=e=>{ if(e.target.files[0]) openFile(e.target.files[0]); e.target.value=""; };
@@ -1016,14 +1029,66 @@ drop.addEventListener("drop",e=>{ const f=e.dataTransfer.files[0]; if(f) openFil
       await openText(text); msg(""); }catch(e){ msg("Impossible d'ouvrir cette partition : "+(e.message||e),true); } };
     $("#library").appendChild(b); });
 })();
-window.__test={get S(){return S;},openText,P,curQ};
+/* ---- Mes partitions : les partitions lues restent sur l'appareil (IndexedDB), pour ne pas relire le PDF ---- */
+const Mine=(function(){
+  const MAX=40; let current=null;
+  const db=()=>new Promise((res,rej)=>{ const r=indexedDB.open("voix-maris-stella",1);
+    r.onupgradeneeded=()=>r.result.createObjectStore("partitions",{keyPath:"id",autoIncrement:true});
+    r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
+  const tx=async(mode,fn)=>{ const d=await db(); return new Promise((res,rej)=>{ const t=d.transaction("partitions",mode);
+    const st=t.objectStore("partitions"); const out=fn(st); t.oncomplete=()=>res(out&&out.result!==undefined?out.result:out); t.onerror=()=>rej(t.error); }); };
+  const all=async()=>{ try{ return (await tx("readonly",st=>st.getAll())).sort((a,b)=>b.date-a.date); }catch(e){ return []; } };
+  const hash=t=>{ let h=0; for(let i=0;i<t.length;i+=7) h=(h*31+t.charCodeAt(i))|0; return h+":"+t.length; };
+  const nice=t=>(t||"").trim()||"Partition sans titre";
+  async function save(xml,titre){
+    try{
+      try{ navigator.storage&&navigator.storage.persist&&navigator.storage.persist(); }catch(e){}
+      const h=hash(xml); const list=await all(); const same=list.find(x=>x.h===h);
+      const rec={...(same||{}), h, xml, titre:same?same.titre:nice(titre), date:Date.now(),
+        mesures:S?S.measInfo.length:0, voix:S?S.tracks.filter(t=>!t.accomp).length:0};
+      if(same && nice(titre)!=="Partition" && same.titre==="Partition sans titre") rec.titre=nice(titre);
+      const id=await tx("readwrite",st=>st.put(rec)); current=same?same.id:id;
+      if($("#title").textContent.trim()!==rec.titre) $("#title").textContent=rec.titre;
+      const extra=list.filter(x=>x.h!==h).slice(MAX-1); for(const x of extra) await tx("readwrite",st=>st.delete(x.id));
+    }catch(e){ console.warn("Mes partitions : enregistrement impossible",e); }
+  }
+  async function rename(titre){
+    if(current===null) return;
+    try{ const list=await all(); const r=list.find(x=>x.id===current); if(!r) return;
+      r.titre=nice(titre); await tx("readwrite",st=>st.put(r)); }catch(e){}
+  }
+  async function list(){
+    const items=await all(); const box=$("#mine"); box.innerHTML="";
+    $("#mineWrap").classList.toggle("hidden",!items.length);
+    const fmt=d=>new Date(d).toLocaleDateString("fr-FR",{day:"numeric",month:"short"});
+    items.forEach(it=>{
+      const row=document.createElement("div"); row.className="item";
+      const o=document.createElement("button"); o.className="open"; o.textContent="♪ "+it.titre;
+      o.title=it.titre+(it.mesures?" · "+it.mesures+" mesures":"")+(it.voix?" · "+it.voix+" voix":"");
+      o.onclick=async()=>{ try{ msg("Ouverture…"); await openText(it.xml); $("#title").textContent=it.titre; current=it.id;
+        it.date=Date.now(); tx("readwrite",st=>st.put(it)); msg(""); }catch(e){ msg("Impossible d'ouvrir cette partition : "+(e.message||e),true); } };
+      const w=document.createElement("span"); w.className="when"; w.textContent=fmt(it.date);
+      const d=document.createElement("button"); d.className="del"; d.textContent="✕"; d.title="Retirer de mes partitions";
+      d.onclick=async()=>{ if(!d.classList.contains("sure")){ d.classList.add("sure"); d.textContent="Retirer ?";
+          setTimeout(()=>{ d.classList.remove("sure"); d.textContent="✕"; },4000); return; }
+        await tx("readwrite",st=>st.delete(it.id)); if(current===it.id) current=null; list(); };
+      row.append(o,w,d); box.appendChild(row); });
+  }
+  return {save,rename,list,get current(){return current;}};
+})();
+// renommer : on clique sur le titre, on tape, Entrée ou clic ailleurs
+$("#title").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); e.target.blur(); } });
+$("#title").addEventListener("blur",e=>{ const t=e.target.textContent.trim(); if(!t) e.target.textContent="Partition sans titre"; Mine.rename(e.target.textContent); });
+Mine.list();
+window.__test={get S(){return S;},openText,P,curQ,Mine};
 /* ---- partition transmise par la page de lecture (même site, stockage local) ---- */
 (async function(){
   let xml=null, titre="";
   try{ xml=localStorage.getItem("voix-musicxml"); titre=localStorage.getItem("voix-titre")||"";
        localStorage.removeItem("voix-musicxml"); localStorage.removeItem("voix-titre"); }catch(e){}
   if(!xml) return;
-  try{ await openText(xml); if(titre && (!S.title || S.title==="Partition")) $("#title").textContent=titre; }
+  try{ await openText(xml); if(titre && (!S.title || S.title==="Partition")) $("#title").textContent=titre;
+       Mine.save(xml, $("#title").textContent); }
   catch(e){ msg("La partition reçue n'a pas pu être ouverte : "+(e.message||e),true); }
 })();
 // téléphone : ouvrir/fermer les réglages secondaires de la barre de lecture
