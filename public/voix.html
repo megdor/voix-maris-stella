@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maris Stella — Travail des voix</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" crossorigin="anonymous">
+<style>
+  :root{
+    --bg:#f6f3ee; --panel:#fffdf9; --ink:#1d2433; --muted:#6b7280; --line:#e4ddd2;
+    --accent:#1f3a5f; --accent2:#b08d57; --danger:#a33;
+    --r:12px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 Inter,system-ui,sans-serif}
+  header{padding:22px 20px 10px;max-width:1100px;margin:0 auto;display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+  header h1{font-family:"Cormorant Garamond",Georgia,serif;font-weight:600;font-size:30px;margin:0;color:var(--accent);letter-spacing:.2px}
+  header .sub{color:var(--muted);font-size:14px;margin-bottom:5px}
+  main{max-width:1100px;margin:0 auto;padding:0 20px 40px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-top:14px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  button,.btn{font:inherit;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:9px;padding:8px 13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  button:hover,.btn:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  button.primary:hover{filter:brightness(1.1)}
+  button:disabled{opacity:.45;cursor:default}
+  button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  input[type=number]{width:64px;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px}
+  input[type=range]{accent-color:var(--accent)}
+  label.chk{display:inline-flex;gap:6px;align-items:center;color:var(--ink);cursor:pointer}
+  .muted{color:var(--muted)}
+  #drop{border:2px dashed var(--line);border-radius:var(--r);padding:26px;text-align:center;background:#fffdf9;transition:.15s}
+  #drop.over{border-color:var(--accent);background:#eef2f8}
+  #drop strong{color:var(--accent)}
+  #library{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  #library button{background:#f2ece2}
+  .hidden{display:none!important}
+  #title{font-family:"Cormorant Garamond",Georgia,serif;font-size:24px;font-weight:600;margin:0}
+  /* mixer */
+  #tracks{display:grid;gap:8px;margin-top:10px}
+  .trk{display:grid;grid-template-columns:14px minmax(120px,1.4fr) auto auto auto minmax(90px,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:#fff}
+  .trk .sw{width:14px;height:14px;border-radius:4px}
+  .trk input.name{font:inherit;font-weight:600;border:1px solid transparent;background:transparent;padding:4px 6px;border-radius:6px;width:100%}
+  .trk input.name:hover,.trk input.name:focus{border-color:var(--line);outline:none}
+  .trk button{padding:5px 10px;font-size:13px}
+  .trk button.solo.on{background:var(--accent2);border-color:var(--accent2)}
+  .trk button.mute.on{background:#777;border-color:#777}
+  .trk select{font:inherit;font-size:13px;padding:4px;border:1px solid var(--line);border-radius:7px;background:#fff}
+  .trk.silent{opacity:.5}
+  @media (max-width:700px){
+    .trk{grid-template-columns:14px 1fr auto auto;grid-template-areas:"s n so mu" "s v v me"}
+    .trk .sw{grid-area:s}.trk .nm{grid-area:n}.trk .solo{grid-area:so}.trk .mute{grid-area:mu}.trk .vol{grid-area:v}.trk .me{grid-area:me}.trk select{display:none}
+  }
+  /* transport */
+  .transport{position:sticky;bottom:0;z-index:5;background:rgba(255,253,249,.97);backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-top:14px;box-shadow:0 6px 24px rgba(0,0,0,.06)}
+  .transport .big{font-size:17px;padding:9px 18px}
+  #pos{font-variant-numeric:tabular-nums;min-width:120px}
+  .sep{width:1px;height:26px;background:var(--line)}
+  /* views */
+  .tabs{display:flex;gap:6px}
+  #rollWrap{position:relative;overflow:hidden;border-radius:10px;border:1px solid var(--line);background:#fff;margin-top:10px}
+  #roll{display:block;width:100%;cursor:pointer}
+  #scoreWrap{margin-top:10px;max-height:62vh;overflow:auto;border:1px solid var(--line);border-radius:10px;background:#fff;padding:6px}
+  #msg{margin-top:10px;font-size:14px}
+  #msg.err{color:var(--danger)}
+  details summary{cursor:pointer;color:var(--accent);font-weight:500}
+  details ol{margin:8px 0 0 18px;padding:0}
+  details li{margin:4px 0}
+  .fiab{margin-top:12px;padding:10px 12px;border-radius:10px;font-size:13.5px;line-height:1.5}
+  .fiab.ok{background:#eaf5ec;color:#1e6b34}
+  .fiab.warn{background:#fff3e0;color:#7a4300}
+  .fiab.bad{background:#fdecea;color:#8a1f1f}
+  .fiab button.m{padding:1px 8px;font-size:12.5px;margin:2px 3px 2px 0;background:#fff;border-color:#e8c08a}
+  .fiab ul{margin:6px 0 0 18px;padding:0}
+  .susp-ov{position:absolute;background:rgba(255,152,0,.16);border:1.5px solid rgba(230,120,0,.55);border-radius:6px;pointer-events:none}
+  #osmd{position:relative}
+  .pill{font-size:12px;background:#f2ece2;border-radius:99px;padding:2px 8px;color:#6b5a3e}
+</style>
+</head>
+<body>
+<header>
+  <h1>Travail des voix</h1>
+  <div class="sub">Chœur Maris Stella — écouter chaque pupitre seul ou tous ensemble</div>
+</header>
+<main>
+
+  <section class="card" id="loader">
+    <div id="drop">
+      <div><strong>Déposez une partition ici</strong> ou <label class="btn" style="display:inline-flex">choisir un fichier<input id="file" type="file" accept=".musicxml,.xml,.mxl" hidden></label></div>
+      <div class="muted" style="margin-top:6px;font-size:13px">Formats acceptés : MusicXML (.musicxml, .xml) et MusicXML compressé (.mxl)</div>
+      <div style="margin-top:14px"><a class="btn" href="./" style="text-decoration:none;background:#1f3a5f;color:#fff;border-color:#1f3a5f">📄 J'ai un PDF ou une photo : lire la partition</a></div>
+    </div>
+    <div id="libWrap" class="hidden">
+      <div class="muted" style="margin-top:14px;font-size:13px">Partitions du chœur :</div>
+      <div id="library"></div>
+    </div>
+    <div id="msg"></div>
+    <details style="margin-top:12px">
+      <summary>Comment ça marche ?</summary>
+      <ol class="muted">
+        <li>« Lire la partition » : déposez le PDF ou les photos des pages. La lecture se fait dans votre navigateur, rien n'est envoyé.</li>
+        <li>Quand la partition apparaît, cliquez sur « 🎵 Travailler les voix » : elle s'ouvre ici, vérifiée.</li>
+        <li>Les mesures douteuses sont surlignées en orange : fiez-vous alors à la partition papier.</li>
+      </ol>
+    </details>
+  </section>
+
+  <section id="player" class="hidden">
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div>
+          <p id="title"></p>
+          <div class="muted" id="meta" style="font-size:13px"></div>
+        </div>
+        <div class="row">
+          <button id="allOn" title="Toutes les voix au même volume">Toutes les voix</button>
+          <a class="btn" href="./" style="text-decoration:none">📄 Lire une autre partition</a>
+          <button id="changeScore">Ouvrir un fichier</button>
+        </div>
+      </div>
+      <div id="fiab" class="fiab hidden"></div>
+      <div id="tracks"></div>
+      <div class="muted" style="font-size:12.5px;margin-top:8px">
+        <b>Solo</b> : n'entendre que cette voix · <b>Muet</b> : la retirer (pour chanter à sa place) · <b>★ En avant</b> : sa voix forte, les autres en fond · Le nom de chaque voix est modifiable.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div class="tabs">
+          <button id="tabScore" class="on">Partition</button>
+          <button id="tabRoll">Défilement des voix</button>
+        </div>
+        <span class="muted" style="font-size:12.5px" id="viewHint">Cliquez dans le défilement pour vous placer à un endroit.</span>
+      </div>
+      <div id="scoreWrap"><div id="osmd"></div><div id="scoreMsg" class="muted" style="padding:20px"></div></div>
+      <div id="rollWrap" class="hidden"><canvas id="roll"></canvas></div>
+    </div>
+
+    <div class="transport">
+      <div class="row">
+        <button id="play" class="primary big">▶ Lecture</button>
+        <button id="stop" title="Revenir au début">⏮</button>
+        <span id="pos" class="muted">Mesure 1</span>
+        <div class="sep"></div>
+        <label>Tempo <input id="speed" type="range" min="40" max="150" step="5" value="100"> <span id="speedVal">100 %</span></label>
+        <span class="muted" id="bpm"></span>
+        <div class="sep"></div>
+        <button id="giveNote" title="Jouer la première note de chaque voix">♪ Donner la note</button>
+        <label class="chk"><input id="countIn" type="checkbox" checked> Décompte</label>
+        <label class="chk"><input id="metro" type="checkbox"> Métronome</label>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label class="chk"><input id="loop" type="checkbox"> Travailler un passage :</label>
+        <span>de la mesure <input id="from" type="number" min="1" value="1"> à <input id="to" type="number" min="1" value="4"></span>
+        <span class="muted" style="font-size:12.5px">(en boucle)</span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Partitions intégrées (bibliothèque du chœur). Format : [{"titre":"...","xml":"<?xml ..."}] ou [{"titre":"...","url":"https://..."}] -->
+<script id="bibliotheque" type="application/json">[]</script>
+
+<script>
+"use strict";
+/* ================= utilitaires ================= */
+const $ = s => document.querySelector(s);
+const COLORS = ["#c0392b","#d68910","#1e8449","#1f5f99","#7d3c98","#117a65","#a04000","#5d6d7e"];
+function msg(t, err){ const m=$("#msg"); m.textContent=t||""; m.className=err?"err":""; }
+
+/* ================= lecture .mxl (zip) sans bibliothèque ================= */
+async function unzipMxl(buf){
+  const dv = new DataView(buf), u8 = new Uint8Array(buf);
+  let eocd=-1;
+  for(let i=u8.length-22;i>=Math.max(0,u8.length-66000);i--){ if(dv.getUint32(i,true)===0x06054b50){eocd=i;break;} }
+  if(eocd<0) throw new Error("Fichier .mxl illisible (zip invalide)");
+  const n=dv.getUint16(eocd+10,true); let p=dv.getUint32(eocd+16,true);
+  const files={};
+  for(let k=0;k<n;k++){
+    const method=dv.getUint16(p+10,true), csize=dv.getUint32(p+20,true);
+    const nl=dv.getUint16(p+28,true), el=dv.getUint16(p+30,true), cl=dv.getUint16(p+32,true), off=dv.getUint32(p+42,true);
+    const name=new TextDecoder().decode(u8.subarray(p+46,p+46+nl));
+    files[name]={method,csize,off}; p+=46+nl+el+cl;
+  }
+  async function read(name){
+    const f=files[name]; const lnl=dv.getUint16(f.off+26,true), lel=dv.getUint16(f.off+28,true);
+    const data=u8.subarray(f.off+30+lnl+lel, f.off+30+lnl+lel+f.csize);
+    if(f.method===0) return decodeText(data);
+    if(f.method===8){
+      const ds=new DecompressionStream("deflate-raw");
+      const out=await new Response(new Blob([data]).stream().pipeThrough(ds)).arrayBuffer();
+      return decodeText(new Uint8Array(out));
+    }
+    throw new Error("Compression non prise en charge");
+  }
+  let root=null;
+  if(files["META-INF/container.xml"]){
+    const c=new DOMParser().parseFromString(await read("META-INF/container.xml"),"application/xml");
+    const rf=c.querySelector("rootfile"); if(rf) root=rf.getAttribute("full-path");
+  }
+  if(!root||!files[root]) root=Object.keys(files).find(f=>!f.startsWith("META-INF")&&/\.(xml|musicxml)$/i.test(f));
+  if(!root) throw new Error("Aucune partition trouvée dans le .mxl");
+  return read(root);
+}
+
+/* ================= analyse MusicXML ================= */
+const STEP={C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+const ACCOMP=/piano|orgue|organ|clavier|accomp|pf\.?$|keyboard|harmonium|ped/i;
+const VOCAL=/sop|alt|t[ée]n|bas|bar|voix|voice|chœur|choeur|choir|chor|^s\.?\s?\d?$|^a\.?$|^t\.?$|^b\.?$|s\.?a\.?|t\.?b\.?/i;
+const txt=(el,sel)=>{const x=el.querySelector(sel);return x?x.textContent.trim():null;};
+const kids=(el,name)=>Array.from(el.children).filter(c=>c.tagName===name);
+
+function parseScore(xmlText){
+  const doc=new DOMParser().parseFromString(xmlText,"application/xml");
+  if(doc.querySelector("parsererror")) throw new Error("Le fichier n'est pas un MusicXML valide.");
+  const root=doc.documentElement;
+  if(root.tagName==="score-timewise") throw new Error("Format « timewise » non pris en charge : réexportez depuis MuseScore.");
+  if(root.tagName!=="score-partwise") throw new Error("Ce fichier ne ressemble pas à une partition MusicXML.");
+  const title = txt(root,"work > work-title")||txt(root,"movement-title")||
+    (Array.from(root.querySelectorAll("credit-words")).sort((a,b)=>(+b.getAttribute("font-size")||0)-(+a.getAttribute("font-size")||0))[0]||{}).textContent||"Partition";
+  const composer = (Array.from(root.querySelectorAll("identification creator")).find(c=>c.getAttribute("type")==="composer")||{}).textContent||"";
+  const partNames={};
+  root.querySelectorAll("part-list > score-part").forEach(sp=>{partNames[sp.getAttribute("id")]=(txt(sp,"part-name")||sp.getAttribute("id")).replace(/\s+/g," ");});
+  const parts=kids(root,"part");
+  if(!parts.length) throw new Error("Aucune portée trouvée.");
+  const nMeas=Math.max(...parts.map(p=>kids(p,"measure").length));
+  const accompSet=accompParts(parts, partNames);
+
+  // structure par mesure (tirée de la 1re partie) : n°, reprises, voltas, longueur, chiffrage
+  const measInfo=[]; for(let i=0;i<nMeas;i++) measInfo.push({num:null,fwd:false,back:0,ending:null,endingStart:false,endingStop:false,len:0,beats:4,beatType:4,tempo:null});
+  // notes brutes par mesure
+  const raw=[]; // {m, t (noires dans la mesure), d, midi, key, tieStart, tieStop}
+  const trackDefs=new Map();
+  parts.forEach((part,pi)=>{
+    const pid=part.getAttribute("id"); const pname=partNames[pid]||("Partie "+(pi+1));
+    // accompagnement : nom explicite, ou grande portée (2 portées et plus) sans nom de voix
+    const accomp=accompSet.has(pi);
+    let div=1, beats=4, beatType=4, transpose=0;
+    kids(part,"measure").forEach((m,mi)=>{
+      const info=measInfo[mi];
+      if(pi===0){ info.num=m.getAttribute("number"); }
+      let t=0, lastStart=0, maxT=0;
+      for(const el of m.children){
+        const tag=el.tagName;
+        if(tag==="attributes"){
+          const d=txt(el,"divisions"); if(d) div=+d;
+          const b=txt(el,"time > beats"), bt=txt(el,"time > beat-type"); if(b){beats=+b.split("+").reduce((a,x)=>a+ +x,0)||4; beatType=+bt||4;}
+          const tr=txt(el,"transpose > chromatic"), oc=txt(el,"transpose > octave-change"); if(tr!==null) transpose=(+tr)+12*(+oc||0);
+        } else if(tag==="backup"){ t-=(+txt(el,"duration")||0)/div; }
+        else if(tag==="forward"){ t+=(+txt(el,"duration")||0)/div; maxT=Math.max(maxT,t); }
+        else if(tag==="direction"||tag==="sound"){
+          const s=tag==="sound"?el:el.querySelector("sound");
+          let bpm=s&&s.getAttribute("tempo")?+s.getAttribute("tempo"):null;
+          if(!bpm&&tag==="direction"){ const pm=txt(el,"metronome > per-minute"), bu=txt(el,"metronome > beat-unit");
+            if(pm&&!isNaN(+pm)){ const f={whole:4,half:2,quarter:1,eighth:.5,"16th":.25}[bu]||1; bpm=+pm*f*(el.querySelector("metronome > beat-unit-dot")?1.5:1);} }
+          if(bpm&&pi===0){ info.tempo=info.tempo||[]; info.tempo.push({t,bpm}); }
+          else if(bpm&&!measInfo.some(x=>x.tempo)) { info.tempo=[{t,bpm}]; }
+        }
+        if((tag==="direction"||tag==="sound")&&pi===0){
+          const s2=tag==="sound"?el:el.querySelector("sound");
+          if(s2){ if(s2.getAttribute("segno")) info.segno=true; if(s2.getAttribute("coda")) info.coda=true;
+            if(s2.getAttribute("dacapo")==="yes") info.dc=true; if(s2.getAttribute("dalsegno")) info.ds=true;
+            if(s2.getAttribute("fine")) info.fine=true; if(s2.getAttribute("tocoda")) info.tocoda=true; }
+          if(tag==="direction"){
+            if(el.querySelector("direction-type > segno")) info.segno=true;
+            if(el.querySelector("direction-type > coda")) info.codaSym=true;
+            const w=Array.from(el.querySelectorAll("direction-type > words")).map(x=>x.textContent.trim()).join(" ");
+            if(/^(d\.?\s?c\.?|da\s+capo)\b/i.test(w)) info.dc=true;
+            if(/^(d\.?\s?s\.?|dal\s+segno)\b/i.test(w)) info.ds=true;
+            if(/^fine\.?$/i.test(w)) info.fine=true;
+            if(/^(to\s+coda|à\s+la\s+coda|vers\s+la\s+coda|al\s+coda)$/i.test(w)) info.tocoda=true;
+            if(/^coda$/i.test(w)) info.coda=true;
+          }
+        }
+        if(tag==="barline"&&pi===0){
+          const rep=el.querySelector("repeat");
+          if(rep){ if(rep.getAttribute("direction")==="forward") info.fwd=true; else info.back=+(rep.getAttribute("times")||2); }
+          const en=el.querySelector("ending");
+          if(en){ const ty=en.getAttribute("type"); const nums=(en.getAttribute("number")||"1").split(/[,\s]+/).map(Number).filter(x=>x);
+            if(ty==="start"){info.ending=nums;info.endingStart=true;} else {info.ending=info.ending||nums; info.endingStop=true;} }
+        } else if(tag==="note"){
+          if(el.querySelector("grace")) continue;      // petites notes d'ornement : sans durée, non jouées
+          const isCue=!!el.querySelector(":scope > cue"); // notes de repère : comptent dans le temps, non jouées
+          const isChord=!!el.querySelector("chord");
+          const d=(+txt(el,"duration")||0)/div;
+          const start=isChord?lastStart:t;
+          if(!isChord){ lastStart=t; t+=d; maxT=Math.max(maxT,t);
+            // durée cumulée par voix, pour le contrôle de fiabilité
+            const vk=pid+"|"+(txt(el,"voice")||"1"); info.vd=info.vd||{};
+            (info.vd[vk]=info.vd[vk]||{d:0,exp:beats*4/beatType,acc:accomp,pid}).d+=d; }
+          if(m.getAttribute("implicit")==="yes") info.implicit=true;
+          if(el.querySelector("rest")||isCue) continue;
+          const step=txt(el,"pitch > step"); if(!step) continue;
+          const midi=12*((+txt(el,"pitch > octave"))+1)+STEP[step]+Math.round(+(txt(el,"pitch > alter")||0))+transpose;
+          const voice=accomp?"acc":(txt(el,"voice")||"1");
+          const staff=txt(el,"staff")||"1";
+          const key=pid+"|"+voice;
+          if(!trackDefs.has(key)) trackDefs.set(key,{key,pid,pname,voice,staff,accomp,order:pi*100+(+voice||0),count:0,lo:127,hi:0,sum:0});
+          const td=trackDefs.get(key); td.count++; td.lo=Math.min(td.lo,midi); td.hi=Math.max(td.hi,midi); td.sum+=midi;
+          const ties=Array.from(el.querySelectorAll(":scope > tie")).map(x=>x.getAttribute("type"));
+          raw.push({m:mi,t:start,d,midi,key,tieStart:ties.includes("start"),tieStop:ties.includes("stop"),
+            lyric:txt(el,"lyric > text")});
+        }
+      }
+      info.len=Math.max(info.len,maxT,t);
+      if(pi===0){info.beats=beats;info.beatType=beatType;}
+    });
+  });
+  // longueur par défaut si mesure vide
+  measInfo.forEach(i=>{ if(!i.len) i.len=i.beats*4/i.beatType; });
+
+  // voix secondaires très courtes (divisi passager : moins de 15 % des notes de la voix principale de la
+  // même partie) : rattachées à la voix principale, où elles sonnent en accord
+  const alias={};
+  { const byP={}; trackDefs.forEach(d=>{ if(d.count>0&&!d.accomp) (byP[d.pid]=byP[d.pid]||[]).push(d); });
+    Object.values(byP).forEach(list=>{ if(list.length<2) return;
+      const main=list.reduce((a,b)=>b.count>a.count?b:a);
+      list.forEach(d=>{ if(d!==main && d.count<0.15*main.count && d.staff===main.staff){ alias[d.key]=main.key; main.count+=d.count; main.lo=Math.min(main.lo,d.lo); main.hi=Math.max(main.hi,d.hi); main.sum+=d.sum; d.count=0; } }); }); }
+  raw.forEach(n=>{ if(alias[n.key]) n.key=alias[n.key]; });
+  // pistes : nommage
+  let defs=Array.from(trackDefs.values()).filter(d=>d.count>0).sort((a,b)=>a.order-b.order);
+  const byPart={}; defs.forEach(d=>(byPart[d.pid]=byPart[d.pid]||[]).push(d));
+  Object.values(byPart).forEach(list=>{
+    if(list.length===1){ list[0].name=list[0].pname; return; }
+    list.sort((a,b)=>(b.sum/b.count)-(a.sum/a.count)); // aigu -> grave
+    const pieces=list[0].pname.split(/\s*(?:\/|,|&|\+| et | and |-)\s*/i).filter(Boolean);
+    list.forEach((d,i)=>{ d.name = pieces.length===list.length ? pieces[i] : list[0].pname+" — voix "+(i+1); });
+  });
+  // ordre final : par partie puis aigu -> grave
+  defs=Object.values(byPart).flat();
+  const tracks=defs.map((d,i)=>({key:d.key,name:d.name.trim(),accomp:d.accomp,lo:d.lo,hi:d.hi,color:COLORS[i%COLORS.length],
+    vol:d.accomp?0.6:1,solo:false,mute:false,instr:d.accomp?"piano":"voix",idx:i}));
+  const trackIndex={}; tracks.forEach((t,i)=>trackIndex[t.key]=i);
+
+  // dépliage des reprises
+  const order=expandRepeats(measInfo);
+  // temps en noires sur la ligne de temps dépliée
+  const notesByMeas={}; raw.forEach(n=>(notesByMeas[n.m]=notesByMeas[n.m]||[]).push(n));
+  const timeline=[]; // {m (index mesure), q0 (noire de départ), len}
+  let Q=0; order.forEach(mi=>{ timeline.push({m:mi,q0:Q,len:measInfo[mi].len}); Q+=measInfo[mi].len; });
+  const totalQ=Q;
+  const events=[]; const openTie={};
+  timeline.forEach((seg,si)=>{
+    (notesByMeas[seg.m]||[]).sort((a,b)=>a.t-b.t).forEach(n=>{
+      const ti=trackIndex[n.key]; if(ti===undefined) return;
+      const q=seg.q0+n.t; const tk=ti+":"+n.midi;
+      if(n.tieStop && openTie[tk] && Math.abs(openTie[tk].q+openTie[tk].d-q)<0.01){
+        openTie[tk].d+=n.d; if(!n.tieStart) delete openTie[tk]; return;
+      }
+      const ev={q,d:n.d,midi:n.midi,tr:ti,seg:si};
+      events.push(ev);
+      if(n.tieStart) openTie[tk]=ev; else delete openTie[tk];
+    });
+  });
+  events.sort((a,b)=>a.q-b.q||a.tr-b.tr);
+  splitChordTracks(tracks, events);
+  nameTracks(tracks, events);
+  const suspects=checkScore(measInfo, tracks, events, timeline, partNames);
+  // carte des tempos (en noires dépliées)
+  const tempos=[];
+  timeline.forEach(seg=>{ (measInfo[seg.m].tempo||[]).forEach(tp=>tempos.push({q:seg.q0+tp.t,bpm:tp.bpm})); });
+  tempos.sort((a,b)=>a.q-b.q);
+  if(!tempos.length||tempos[0].q>0) tempos.unshift({q:0,bpm:tempos.length?tempos[0].bpm:76});
+  const vocalSuspects=new Set([...suspects].filter(([,r])=>r.some(x=>!x.acc)).map(([m])=>m));
+  return {title:title.trim(),composer:composer.trim(),tracks,events,timeline,measInfo,totalQ,tempos,xml:xmlText,suspects,vocalSuspects,
+    hasRepeats:order.length!==measInfo.length};
+}
+
+// Quelles parties sont l'accompagnement ? Les noms décident quand ils existent (« Piano », « Orgue »,
+// « Soprano »…). Sinon (moteurs de lecture : « Part 1 »…) : l'accompagnement est la DERNIÈRE grande portée
+// (2 portées ou plus) ayant des parties au-dessus d'elle, et tout ce qui est écrit en dessous (pédalier…).
+// Une partition chorale « fermée » sur 2 portées, seule ou au-dessus d'un piano, reste du chant.
+function accompParts(parts, partNames){
+  const set=new Set();
+  const name=i=>partNames[parts[i].getAttribute("id")]||"";
+  const isVocal=i=>VOCAL.test(name(i)) && !ACCOMP.test(name(i));
+  parts.forEach((p,i)=>{ if(ACCOMP.test(name(i))) set.add(i); });
+  const multi=[]; parts.forEach((p,i)=>{ if(+(txt(p,"attributes > staves")||1)>=2 && !isVocal(i)) multi.push(i); });
+  const A=multi.length?multi[multi.length-1]:-1;
+  if(A>0) for(let i=A;i<parts.length;i++) if(!isVocal(i)) set.add(i);
+  return set;
+}
+
+// Plusieurs voix écrites en accords sur une même portée (ex. 3 voix en accords) :
+// si la plupart des attaques d'une piste vocale sont des accords de même taille, on la sépare
+// en autant de voix, de l'aiguë à la grave. Une note seule (unisson) va à toutes les voix.
+function splitChordTracks(tracks, events){
+  const out=[]; const remap=new Map();
+  tracks.forEach((t,ti)=>{
+    const evs=events.filter(e=>e.tr===ti);
+    const onsets=new Map(); evs.forEach(e=>{ const k=e.q.toFixed(4); (onsets.get(k)||onsets.set(k,[]).get(k)).push(e); });
+    const sizes=[...onsets.values()].map(g=>new Set(g.map(e=>e.midi)).size);
+    const hist={}; sizes.forEach(s=>hist[s]=(hist[s]||0)+1);
+    const [kStr,cnt]=Object.entries(hist).sort((a,b)=>b[1]-a[1])[0]||["1",0];
+    const k=+kStr;
+    if(t.accomp || k<2 || k>4 || cnt < 0.6*sizes.length || sizes.length<4){ remap.set(ti,[out.length]); out.push(t); return; }
+    const ids=[]; for(let r=0;r<k;r++){ ids.push(out.length); out.push({...t,name:t.name+" — voix "+(r+1),split:true,rank:r}); }
+    remap.set(ti,ids);
+    for(const g of onsets.values()){
+      const sorted=[...g].sort((a,b)=>b.midi-a.midi);
+      const uniq=[]; const dup=[];
+      sorted.forEach(e=>{ if(uniq.some(u=>u.midi===e.midi)) dup.push(e); else uniq.push(e); });
+      const used=new Set();
+      for(let r=0;r<k;r++){
+        const src=uniq[Math.min(r, uniq.length-1)];
+        if(used.has(src)) events.push({...src,tr:-1-ids[r]});   // unisson : la note sert aussi à cette voix
+        else { src.tr=-1-ids[r]; used.add(src); }
+      }
+      // notes en surnombre (accord plus grand que k) : à la voix la plus grave
+      uniq.slice(k).forEach(e=>{ e.tr=-1-ids[k-1]; });
+      dup.forEach(e=>{ e.dead=true; }); // doublons exacts : supprimés plus bas
+    }
+  });
+  for(let i=events.length-1;i>=0;i--) if(events[i].dead) events.splice(i,1);
+  events.forEach(e=>{ if(e.tr<0) e.tr=-1-e.tr; else { const ids=remap.get(e.tr); e.tr=ids?ids[0]:e.tr; } });
+  events.sort((a,b)=>a.q-b.q||a.tr-b.tr);
+  tracks.length=0; out.forEach((t,i)=>{ t.idx=i; t.color=COLORS[i%COLORS.length]; tracks.push(t); });
+  tracks.forEach((t,i)=>{ const ev=events.filter(e=>e.tr===i); if(ev.length){ t.lo=Math.min(...ev.map(e=>e.midi)); t.hi=Math.max(...ev.map(e=>e.midi)); } });
+}
+// Noms génériques (« Part 1 », « Voice »… comme en produisent les moteurs de lecture) :
+// on nomme d'après la tessiture. 4 voix → Soprano, Alto, Ténor, Basse ; sinon Voix 1 (aiguë)…
+function nameTracks(tracks, events){
+  const generic=/^(part|partie|voice|voix|staff|p)\s*\d*$|— voix \d+$/i;
+  const voc=tracks.map((t,i)=>({t,i})).filter(o=>!o.t.accomp);
+  if(!voc.length || !voc.every(o=>generic.test(o.t.name.trim()) || !o.t.name.trim())) return;
+  const mean=i=>{ const ev=events.filter(e=>e.tr===i); return ev.reduce((s,e)=>s+e.midi,0)/(ev.length||1); };
+  // ordre de la partition (de haut en bas) ; noms SATB seulement si cet ordre va bien de l'aigu au grave,
+  // sinon (soliste, voix croisées…) noms neutres dans l'ordre de la partition — modifiables par le choriste
+  const ord=voc.map(o=>({...o,m:mean(o.i)}));
+  // SATB seulement si les voix sont nettement étagées (écart moyen ≥ 2,5 demi-tons entre voisines,
+  // ≥ 1,5 entre Soprano 1 et 2) : sinon (soliste au-dessus des sopranos, voix croisées…) on ne devine pas
+  const gap=(j,min)=>ord[j-1].m-ord[j].m>=min;
+  const satb = ord.length===4 && gap(1,2.5)&&gap(2,2.5)&&gap(3,2.5);
+  const ssatb= ord.length===5 && gap(1,1.5)&&gap(2,2.5)&&gap(3,2.5)&&gap(4,2.5);
+  const names = satb ? ["Soprano","Alto","Ténor","Basse"]
+              : ssatb ? ["Soprano 1","Soprano 2","Alto","Ténor","Basse"]
+              : ord.map((_,j)=>"Voix "+(j+1)+(ord.length>1&&j===0?" (en haut)":ord.length>1&&j===ord.length-1?" (en bas)":""));
+  ord.forEach((o,j)=>{ o.t.name=names[j]; });
+  tracks.forEach(t=>{ if(t.accomp && /^(part|partie|p)\s*\d*$/i.test(t.name.trim())) t.name="Accompagnement"; });
+}
+
+// Contrôle de fiabilité : renvoie Map(index de mesure -> [{who, why, acc}])
+// Règles issues du banc d'essai : durée des voix, note isolée très éloignée (erreur de hauteur
+// typique de la reconnaissance), saut de plus d'une octave dans une voix chantée.
+function checkScore(measInfo, tracks, events, timeline, partNames){
+  const S=new Map(); const add=(mi,who,why,acc)=>{ const l=S.get(mi)||S.set(mi,[]).get(mi); if(!l.some(x=>x.who===who&&x.why===why)) l.push({who,why,acc:!!acc}); };
+  const nameOf=(pid,voice)=>{ const t=tracks.find(t=>t.key===pid+"|"+voice)||tracks.find(t=>t.key.startsWith(pid+"|")); return t?t.name.replace(/ — voix \d+$/,""):(partNames[pid]||pid); };
+  const fmt=x=>{ const r=Math.round(x*100)/100; return (r+"").replace(".",","); };
+  const last=measInfo.length-1;
+  measInfo.forEach((info,mi)=>{
+    const vd=Object.entries(info.vd||{}).filter(([,v])=>v.d>0.001);
+    if(!vd.length) return;
+    const voc=vd.filter(([,v])=>!v.acc);
+    const pickup=(mi===0||mi===last||info.implicit) && vd.every(([,v])=>v.d<=v.exp+0.01) &&
+      (voc.length? voc.every(([,v])=>Math.abs(v.d-voc[0][1].d)<0.01) : true);
+    for(const [k,v] of vd){
+      if(Math.abs(v.d-v.exp)<0.01 || pickup) continue;
+      const [pid,voice]=k.split("|");
+      add(mi, v.acc?"Accompagnement":nameOf(pid,voice), `durée : ${fmt(v.d)} temps au lieu de ${fmt(v.exp)}`, v.acc);
+    }
+  });
+  tracks.forEach((t,ti)=>{
+    if(t.accomp) return;
+    const ev=events.filter(e=>e.tr===ti);
+    const seq=[]; ev.forEach(e=>{ const p=seq[seq.length-1]; if(p && Math.abs(p.q-e.q)<1e-6){ if(e.midi>p.midi) seq[seq.length-1]=e; } else seq.push(e); });
+    // note isolée : aller-retour de 10 demi-tons ou plus — sauf saut d'octave exacte, courant à la basse
+    let skip=-1;
+    for(let i=1;i<seq.length;i++){
+      const a=seq[i-1].midi, b=seq[i].midi, mi=timeline[seq[i].seg].m;
+      const c=i<seq.length-1?seq[i+1].midi:null;
+      const octaveAR = Math.abs(b-a)===12 || Math.abs(b-c)===12;   // un saut d'octave exacte est un geste musical normal
+      if(c!==null && !octaveAR && Math.abs(b-a)>=10 && Math.abs(b-c)>=10 && Math.sign(b-a)===Math.sign(b-c)){
+        add(mi, t.name, "note isolée très éloignée de ses voisines"); skip=i+1; continue; }   // le retour n'est pas une 2e erreur
+      if(i!==skip && Math.abs(b-a)>12) add(mi, t.name, `saut de ${Math.abs(b-a)} demi-tons`);
+    }
+    // registre inhabituel : toute une mesure loin de la tessiture habituelle de la voix (clé mal lue, octave fausse)
+    const sorted=seq.map(e=>e.midi).sort((x,y)=>x-y); if(sorted.length<8) return;
+    const med=sorted[Math.floor(sorted.length/2)];
+    const byM=new Map(); seq.forEach(e=>{ const m=timeline[e.seg].m; (byM.get(m)||byM.set(m,[]).get(m)).push(e.midi); });
+    byM.forEach((arr,m)=>{ const mean=arr.reduce((x,y)=>x+y,0)/arr.length;
+      if(arr.length>=2 && Math.abs(mean-med)>=10) add(m, t.name, `registre inhabituel (${mean>med?"trop aigu":"trop grave"} pour cette voix : clé ou octave mal lue ?)`); });
+  });
+  return S;
+}
+
+function expandRepeats(mi){
+  const n=mi.length, endingOf=new Array(n).fill(null);
+  let cur=null;
+  for(let i=0;i<n;i++){ if(mi[i].endingStart) cur=mi[i].ending; if(cur) endingOf[i]=cur; if(mi[i].endingStop) cur=null; }
+  // sauts : D.C. / D.S. (au plus un), Fine, To Coda, Coda
+  const jumpIdx=mi.findIndex(m=>m.dc||m.ds);
+  const order=[]; const backDone={}; let i=0, start=0, pass=1, jumped=false;
+  while(i<n && order.length<5000){
+    const m=mi[i];
+    if(m.fwd && !jumped){ start=i; pass=1; }
+    jumped=false;
+    if(endingOf[i] && !endingOf[i].includes(pass)){ i++; continue; }
+    order.push(i);
+    if(m.back){
+      backDone[i]=(backDone[i]||0)+1;
+      if(backDone[i]<m.back){ pass++; i=start; jumped=true; continue; }
+      backDone[i]=0;
+      if(!endingOf[i]) { pass=1; start=i+1; }
+    }
+    if(i===jumpIdx) break;           // fin de la première lecture : on saute
+    i++;
+  }
+  if(jumpIdx<0) return order;
+  // seconde lecture, sans refaire les reprises (usage courant) : on prend la dernière volta de chaque groupe
+  const lastEnding=i2=>{ // la volta à jouer dans un groupe = numéro le plus élevé du groupe
+    let a=i2; while(a>0&&endingOf[a-1]) a--; let mx=0; for(let k=a;k<n&&endingOf[k];k++) mx=Math.max(mx,...endingOf[k]); return mx; };
+  const segnoIdx=mi.findIndex(m=>m.segno);
+  const from=mi[jumpIdx].ds && segnoIdx>=0 ? segnoIdx : 0;
+  const codaTarget=(()=>{ for(let k=jumpIdx+1;k<n;k++) if(mi[k].coda||mi[k].codaSym) return k; return -1; })();
+  let toCoda=mi.findIndex(m=>m.tocoda);
+  if(toCoda<0 && codaTarget>=0){ toCoda=mi.findIndex((m,k)=>m.codaSym && k<jumpIdx); }
+  const play=(a,b)=>{ for(let k=a;k<=b&&order.length<5000;k++){
+      if(endingOf[k] && !endingOf[k].includes(lastEnding(k))) continue;
+      order.push(k);
+      if(mi[k].fine) return "fin";
+      if(k===toCoda && codaTarget>=0) return "coda";
+    } return "bout"; };
+  const r=play(from, jumpIdx);
+  if(r==="coda") play(codaTarget, n-1);
+  else if(r==="bout" && codaTarget<0 && jumpIdx<n-1){ /* rien après le saut : fin */ }
+  return order;
+}
+
+/* ================= audio ================= */
+let ctx=null, master=null;
+function audio(){
+  if(!ctx){ ctx=new (window.AudioContext||window.webkitAudioContext)(); master=ctx.createGain(); master.gain.value=0.5;
+    const comp=ctx.createDynamicsCompressor(); master.connect(comp); comp.connect(ctx.destination); }
+  if(ctx.state==="suspended") ctx.resume();
+  return ctx;
+}
+const freq=m=>440*Math.pow(2,(m-69)/12);
+let live=new Set();
+function playNote(midi,t0,dur,vol,instr){
+  const c=ctx, f=freq(midi), g=c.createGain(), end=t0+dur;
+  const nodes=[g];
+  if(instr==="piano"){
+    const o=c.createOscillator(); o.type="triangle"; o.frequency.value=f;
+    const o2=c.createOscillator(); o2.type="sine"; o2.frequency.value=f*2; const g2=c.createGain(); g2.gain.value=.25;
+    o.connect(g); o2.connect(g2); g2.connect(g);
+    const peak=.32*vol; g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(peak,t0+.008);
+    g.gain.setTargetAtTime(peak*.25,t0+.01,.35); g.gain.setTargetAtTime(0,end,.08);
+    o.start(t0);o2.start(t0);o.stop(end+.5);o2.stop(end+.5); nodes.push(o,o2);
+  } else {
+    // voix « ou » : deux oscillateurs légèrement désaccordés, filtre doux, vibrato tardif
+    const o=c.createOscillator(), o2=c.createOscillator(); o.type="sawtooth"; o2.type="triangle";
+    o.frequency.value=f; o2.frequency.value=f*1.003;
+    const lp=c.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=Math.min(2400,f*3.2); lp.Q.value=.7;
+    const go=c.createGain(); go.gain.value=.35;
+    const vib=c.createOscillator(), vg=c.createGain(); vib.frequency.value=5.2; vg.gain.setValueAtTime(0,t0); vg.gain.linearRampToValueAtTime(f*.006,t0+Math.min(.6,dur*.6));
+    vib.connect(vg); vg.connect(o.frequency); vg.connect(o2.frequency);
+    o.connect(go); go.connect(lp); o2.connect(lp); lp.connect(g);
+    const peak=.22*vol, rel=Math.min(.12,dur*.3);
+    g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(peak,t0+Math.min(.06,dur*.3));
+    g.gain.setValueAtTime(peak,Math.max(t0+.06,end-rel)); g.gain.linearRampToValueAtTime(0,end);
+    [o,o2,vib].forEach(x=>{x.start(t0);x.stop(end+.05);}); nodes.push(o,o2,vib,lp,go,vg);
+  }
+  g.connect(master);
+  const h={nodes,end}; live.add(h); nodes[1].onended=()=>live.delete(h);
+}
+function click(t0,strong){
+  const o=ctx.createOscillator(), g=ctx.createGain(); o.type="square"; o.frequency.value=strong?1600:1100;
+  g.gain.setValueAtTime(.12,t0); g.gain.exponentialRampToValueAtTime(.0001,t0+.05);
+  o.connect(g); g.connect(master); o.start(t0); o.stop(t0+.06); const h={nodes:[g,o]}; live.add(h); o.onended=()=>live.delete(h);
+}
+function silenceAll(){ live.forEach(h=>h.nodes.forEach(n=>{try{ if(n.stop) n.stop(); n.disconnect(); }catch(e){}})); live.clear(); }
+
+/* ================= état et horloge ================= */
+let S=null; // partition analysée
+const P={playing:false,q:0,speed:1,ctxStart:0,qStart:0,next:0,timer:null,countEnd:0};
+function bpmAt(q){ let b=S.tempos[0].bpm; for(const t of S.tempos){ if(t.q<=q+1e-6) b=t.bpm; else break; } return b; }
+// secondes (à 100 %) entre q=0 et q
+function secAt(q){ let s=0,prevQ=0,b=S.tempos[0].bpm; for(const t of S.tempos){ if(t.q>=q) break; s+=(t.q-prevQ)*60/b; prevQ=t.q; b=t.bpm; } return s+(q-prevQ)*60/b; }
+function qAtSec(sec){ let s=0,prevQ=0,b=S.tempos[0].bpm; for(const t of S.tempos){ const ds=(t.q-prevQ)*60/b; if(s+ds>sec) break; s+=ds; prevQ=t.q; b=t.bpm; } return prevQ+(sec-s)*b/60; }
+function audible(tr){ const any=S.tracks.some(t=>t.solo); return any?tr.solo:!tr.mute; }
+function loopRange(){
+  if(!$("#loop").checked) return null;
+  const a=+$("#from").value, b=+$("#to").value; const tl=S.timeline;
+  const ia=tl.findIndex(s=>+S.measInfo[s.m].num===a || String(S.measInfo[s.m].num)===String(a));
+  if(ia<0) return null;
+  let ib=-1; for(let k=ia;k<tl.length;k++){ if(String(S.measInfo[tl[k].m].num)===String(b)){ib=k;break;} }
+  if(ib<0) ib=tl.length-1;
+  return {q0:tl[ia].q0,q1:tl[ib].q0+tl[ib].len};
+}
+function curQ(){
+  if(!P.playing) return P.q;
+  const el=(ctx.currentTime-P.ctxStart)*P.speed; if(el<0) return P.qStart;
+  return qAtSec(secAt(P.qStart)+el);
+}
+function schedule(){
+  // en arrière-plan, les minuteries sont ralenties (≈1 s) : on programme plus loin à l'avance
+  const horizon=ctx.currentTime+(document.hidden?2.5:0.25);
+  const loop=loopRange();
+  const endQ=loop?loop.q1:S.totalQ;
+  const base=secAt(P.qStart);
+  const toCtx=q=>P.ctxStart+(secAt(q)-base)/P.speed;
+  while(P.next<S.events.length){
+    const e=S.events[P.next]; if(e.q>=endQ-1e-6){ P.next=S.events.length; break; }
+    const t=toCtx(e.q); if(t>horizon) break;
+    const tr=S.tracks[e.tr];
+    if(audible(tr) && tr.vol>0 && t>ctx.currentTime-0.05){
+      const dur=Math.max(.06,Math.min(toCtx(Math.min(e.q+e.d,endQ))-t, 30));
+      playNote(e.midi,Math.max(t,ctx.currentTime),dur*.97,tr.vol,tr.instr);
+    }
+    P.next++;
+  }
+  // métronome
+  if($("#metro").checked){
+    while(true){
+      const seg=segAt(P.metroQ); if(!seg) break;
+      const t=toCtx(P.metroQ); if(t>horizon||P.metroQ>=endQ-1e-6) break;
+      const mi=S.measInfo[seg.m]; const beat=4/mi.beatType;
+      if(t>=ctx.currentTime-.02) click(t, Math.abs(P.metroQ-seg.q0)<1e-3);
+      P.metroQ+=beat;
+    }
+  }
+  // fin ou boucle
+  if(ctx.currentTime>=toCtx(endQ)){
+    if(loop){ start(loop.q0,false); }
+    else { pause(); P.q=0; render(); }
+  }
+}
+function segAt(q){ const tl=S.timeline; let lo=0,hi=tl.length-1; if(!tl.length) return null; if(q<0) return tl[0];
+  while(lo<hi){ const mid=(lo+hi+1)>>1; if(tl[mid].q0<=q+1e-9) lo=mid; else hi=mid-1; } return tl[lo]; }
+function start(q,withCount){
+  audio(); silenceAll(); clearInterval(P.timer);
+  P.speed=+$("#speed").value/100;
+  let lead=0.08;
+  if(withCount && $("#countIn").checked){
+    const seg=segAt(q), mi=S.measInfo[seg.m]; const beatSec=60/bpmAt(q)/P.speed*(4/mi.beatType);
+    for(let k=0;k<mi.beats;k++) click(ctx.currentTime+0.08+k*beatSec,k===0);
+    lead=0.08+mi.beats*beatSec;
+  }
+  P.qStart=q; P.ctxStart=ctx.currentTime+lead; P.playing=true;
+  P.next=S.events.findIndex(e=>e.q>=q-1e-6); if(P.next<0) P.next=S.events.length;
+  // reprendre une note déjà commencée ? on démarre aux attaques suivantes (plus propre)
+  const seg=segAt(q); const mi=S.measInfo[seg.m]; const beat=4/mi.beatType;
+  P.metroQ=seg.q0+Math.ceil((q-seg.q0)/beat-1e-6)*beat;
+  P.timer=setInterval(schedule,25); schedule();
+  $("#play").textContent="⏸ Pause";
+}
+function pause(){ if(P.playing){ P.q=curQ(); } P.playing=false; clearInterval(P.timer); silenceAll(); $("#play").textContent="▶ Lecture"; }
+function seek(q){ const was=P.playing; pause(); P.q=Math.max(0,Math.min(q,S.totalQ-0.01)); render(); if(was) start(P.q,false); }
+function restartIfPlaying(){ if(P.playing){ const q=curQ(); start(q,false); } }
+
+/* ================= interface ================= */
+function buildTracks(){
+  const box=$("#tracks"); box.innerHTML="";
+  S.tracks.forEach((t,i)=>{
+    const row=document.createElement("div"); row.className="trk";
+    row.innerHTML=`<span class="sw" style="background:${t.color}"></span>
+      <span class="nm"><input class="name" value="${t.name.replace(/"/g,"&quot;")}" aria-label="Nom de la voix"></span>
+      <button class="solo" title="N'entendre que cette voix">Solo</button>
+      <button class="mute" title="Couper cette voix">Muet</button>
+      <button class="me" title="Ma voix en avant, les autres en fond">★ En avant</button>
+      <input class="vol" type="range" min="0" max="1" step="0.05" value="${t.vol}" aria-label="Volume">
+      <select aria-label="Son"><option value="voix">Voix</option><option value="piano">Piano</option></select>`;
+    row.querySelector("select").value=t.instr;
+    row.querySelector(".name").oninput=e=>{t.name=e.target.value;};
+    row.querySelector(".solo").onclick=()=>{t.solo=!t.solo; refreshTracks(); restartIfPlaying();};
+    row.querySelector(".mute").onclick=()=>{t.mute=!t.mute; if(t.mute) t.solo=false; refreshTracks(); restartIfPlaying();};
+    row.querySelector(".me").onclick=()=>{ S.tracks.forEach(o=>{o.solo=false;o.mute=false;o.vol=(o===t)?1:(o.accomp?0.3:0.22);}); refreshTracks(); restartIfPlaying(); };
+    row.querySelector(".vol").oninput=e=>{t.vol=+e.target.value;};
+    row.querySelector(".vol").onchange=restartIfPlaying;
+    row.querySelector("select").onchange=e=>{t.instr=e.target.value; restartIfPlaying();};
+    box.appendChild(row); t.row=row;
+  });
+  refreshTracks();
+}
+function refreshTracks(){
+  S.tracks.forEach(t=>{
+    t.row.querySelector(".solo").classList.toggle("on",t.solo);
+    t.row.querySelector(".mute").classList.toggle("on",t.mute);
+    t.row.querySelector(".vol").value=t.vol;
+    t.row.classList.toggle("silent",!audible(t));
+  });
+}
+
+/* ---- défilement des voix (canvas) ---- */
+const PX_PER_Q=46, LANE=58;
+function drawRoll(){
+  if($("#rollWrap").classList.contains("hidden")) return;
+  const cv=$("#roll"), dpr=window.devicePixelRatio||1, W=cv.clientWidth, H=S.tracks.length*LANE+22;
+  if(cv.height!==H*dpr||cv.width!==W*dpr){ cv.width=W*dpr; cv.height=H*dpr; cv.style.height=H+"px"; }
+  const g=cv.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,W,H);
+  const q=curQ(), head=W*0.28, x=qq=>head+(qq-q)*PX_PER_Q;
+  // pistes
+  S.tracks.forEach((t,i)=>{ g.fillStyle=i%2?"#faf7f2":"#fff"; g.fillRect(0,22+i*LANE,W,LANE); });
+  // mesures
+  g.font="11px Inter,sans-serif"; g.textBaseline="middle";
+  S.timeline.forEach(seg=>{ const X=x(seg.q0); if(X<-200||X>W+50) return;
+    if(S.vocalSuspects.has(seg.m)){ g.fillStyle="rgba(255,152,0,.13)"; g.fillRect(X,18,seg.len*PX_PER_Q,H-18); g.fillStyle="#c76a00"; g.fillText("⚠",X+seg.len*PX_PER_Q-14,10); }
+    g.strokeStyle="#e4ddd2"; g.beginPath(); g.moveTo(X+.5,18); g.lineTo(X+.5,H); g.stroke();
+    g.fillStyle="#8a7c66"; g.fillText(S.measInfo[seg.m].num,X+4,10); });
+  // notes
+  const qMin=q-head/PX_PER_Q-1, qMax=q+(W-head)/PX_PER_Q+1;
+  for(const e of S.events){ if(e.q>qMax) break; if(e.q+e.d<qMin) continue;
+    const t=S.tracks[e.tr], span=Math.max(6,t.hi-t.lo), y0=22+e.tr*LANE;
+    const y=y0+6+(1-(e.midi-t.lo)/span)*(LANE-18);
+    const on=audible(t), playing=e.q<=q&&q<e.q+e.d;
+    g.globalAlpha=on?1:.25; g.fillStyle=t.color;
+    const X=x(e.q), w=Math.max(3,e.d*PX_PER_Q-2);
+    roundRect(g,X+1,y,w,7,3); g.fill();
+    if(playing&&on){ g.globalAlpha=.25; roundRect(g,X-1,y-3,w+4,13,5); g.fill(); }
+    g.globalAlpha=1;
+  }
+  // noms
+  S.tracks.forEach((t,i)=>{ g.fillStyle="rgba(255,253,249,.85)"; const w=g.measureText(t.name).width+12; g.fillRect(0,22+i*LANE+2,w,16);
+    g.fillStyle=t.color; g.font="600 11.5px Inter,sans-serif"; g.fillText(t.name,6,22+i*LANE+10); });
+  // tête de lecture
+  g.fillStyle="#1f3a5f"; g.fillRect(head-1,18,2,H);
+}
+function roundRect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
+$("#roll").addEventListener("click",ev=>{
+  const r=ev.currentTarget.getBoundingClientRect(); const W=r.width, head=W*0.28;
+  const q=curQ()+(ev.clientX-r.left-head)/PX_PER_Q;
+  const seg=segAt(q); seek(seg?seg.q0:0);
+});
+
+/* ---- partition (OpenSheetMusicDisplay, chargé à la demande) ---- */
+let osmd=null, osmdSteps=null, osmdIdx=-1, osmdLoading=null;
+function loadOsmdLib(){
+  if(window.opensheetmusicdisplay) return Promise.resolve();
+  if(osmdLoading) return osmdLoading;
+  osmdLoading=new Promise((res,rej)=>{ const s=document.createElement("script"); s.crossOrigin="anonymous";
+    s.src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1/build/opensheetmusicdisplay.min.js";
+    s.onload=res; s.onerror=()=>rej(new Error("lib")); document.head.appendChild(s); setTimeout(()=>rej(new Error("timeout")),15000); });
+  return osmdLoading;
+}
+async function renderScore(){
+  $("#scoreMsg").textContent="Affichage de la partition…"; $("#osmd").innerHTML="";
+  osmd=null; osmdSteps=null; osmdIdx=-1;
+  try{
+    await loadOsmdLib();
+    osmd=new opensheetmusicdisplay.OpenSheetMusicDisplay("osmd",{autoResize:true,backend:"svg",drawTitle:true,drawPartNames:true,followCursor:false});
+    await osmd.load(S.xml); osmd.render();
+    osmd.cursor.show();
+    // inventaire des positions du curseur : (mesure, position en noires dans la mesure)
+    osmdSteps=[]; const c=osmd.cursor; c.reset(); let guard=0;
+    while(!c.Iterator.EndReached && guard++<20000){
+      const it=c.Iterator; const mIdx=it.CurrentMeasureIndex;
+      const abs=it.currentTimeStamp.RealValue, mStart=it.CurrentMeasure.AbsoluteTimestamp.RealValue;
+      osmdSteps.push({m:mIdx,rel:(abs-mStart)*4}); c.next();
+    }
+    c.reset(); osmdIdx=0;
+    drawSuspectOverlays();
+    $("#scoreMsg").textContent="";
+  }catch(e){
+    console.warn(e);
+    $("#scoreMsg").textContent="La partition ne peut pas être affichée ici (connexion ?). Le défilement des voix reste disponible.";
+    if(!osmd||!osmdSteps){ showTab("roll"); }
+  }
+}
+function moveOsmdCursor(){
+  if(!osmd||!osmdSteps||$("#scoreWrap").classList.contains("hidden")) return;
+  const q=curQ(), seg=segAt(q); if(!seg) return;
+  const rel=q-seg.q0;
+  let target=-1;
+  for(let k=0;k<osmdSteps.length;k++){ const s=osmdSteps[k]; if(s.m===seg.m && s.rel<=rel+1e-6) target=k; else if(s.m>seg.m) break; }
+  if(target<0) target=osmdSteps.findIndex(s=>s.m===seg.m);
+  if(target<0||target===osmdIdx) return;
+  try{
+    const c=osmd.cursor;
+    if(target<osmdIdx){ c.reset(); osmdIdx=0; }
+    while(osmdIdx<target){ c.next(); osmdIdx++; }
+    const el=c.cursorElement; if(el&&P.playing){
+      const box=$("#scoreWrap"), r=el.getBoundingClientRect(), b=box.getBoundingClientRect();
+      if(r.top<b.top+20||r.bottom>b.bottom-20) box.scrollTo({top:box.scrollTop+(r.top-b.top)-b.height*0.3,behavior:"smooth"});
+    }
+  }catch(e){}
+}
+/* ---- fiabilité : panneau + surlignage des mesures douteuses ---- */
+function showReliability(){
+  const box=$("#fiab"); const n=S.measInfo.length;
+  const voc=[...S.vocalSuspects].sort((a,b)=>a-b);
+  const accOnly=[...S.suspects.keys()].filter(m=>!S.vocalSuspects.has(m)).sort((a,b)=>a-b);
+  const num=m=>S.measInfo[m].num;
+  box.classList.remove("hidden","ok","warn","bad");
+  const accLine = accOnly.length ? `<div style="margin-top:6px;opacity:.85">ℹ︎ L'accompagnement peut être approximatif aux mesures ${accOnly.map(num).join(", ")} (les voix chantées n'y sont pas en cause).</div>` : "";
+  if(!voc.length){ box.classList.add("ok");
+    box.innerHTML="✓ <b>Aucune anomalie détectée dans les voix chantées.</b> Les contrôles automatiques (durée des mesures, notes isolées, grands sauts, registre de chaque voix) sont tous passés. Ils repèrent la plupart des erreurs de lecture, mais pas toutes : une fausse note plausible reste invisible."+accLine; return; }
+  const share=voc.length/n;
+  box.classList.add(share>0.3?"bad":"warn");
+  const head = share>0.3
+    ? `⚠ <b>Partition peu fiable : ${voc.length} mesure(s) chantée(s) douteuse(s) sur ${n}.</b> Le fichier contient probablement beaucoup d'erreurs : vérifiez avec la partition papier avant de travailler, ou utilisez un meilleur scan.`
+    : `⚠ <b>${voc.length} mesure(s) à vérifier sur ${n}</b>, surlignées en orange. Ailleurs, aucun problème détecté dans les voix. Dans ces mesures, fiez-vous d'abord à la partition papier.`;
+  const btns=voc.map(mi=>`<button class="m" data-m="${mi}">${num(mi)}</button>`).join("");
+  const det=[...S.suspects.entries()].sort((a,b)=>a[0]-b[0]).map(([mi,r])=>`<li>Mesure ${num(mi)} : ${r.map(x=>`${x.who} — ${x.why}`).join(" ; ")}</li>`).join("");
+  box.innerHTML=`${head}<div style="margin-top:6px">Aller à la mesure : ${btns}</div>${accLine}<details style="margin-top:4px"><summary>Détail des contrôles</summary><ul>${det}</ul></details>`;
+  box.querySelectorAll("button.m").forEach(b=>b.onclick=()=>{ const mi=+b.dataset.m; const seg=S.timeline.find(s=>s.m===mi); if(seg) seek(seg.q0); });
+}
+function drawSuspectOverlays(){
+  try{
+    const host=$("#osmd"); host.querySelectorAll(".susp-ov").forEach(e=>e.remove());
+    if(!osmd||!S||!S.vocalSuspects.size) return;
+    const svg=host.querySelector("svg"); if(!svg) return;
+    const off=svg.getBoundingClientRect(), hb=host.getBoundingClientRect();
+    const u=10*(osmd.zoom||1);
+    S.vocalSuspects.forEach(mi=>{ const r=S.suspects.get(mi);
+      const staves=(osmd.GraphicSheet.MeasureList[mi]||[]).filter(Boolean); if(!staves.length) return;
+      let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+      staves.forEach(gm=>{ const ps=gm.PositionAndShape; const ax=ps.AbsolutePosition.x, ay=ps.AbsolutePosition.y;
+        x0=Math.min(x0,ax+ps.BorderLeft); x1=Math.max(x1,ax+ps.BorderRight); y0=Math.min(y0,ay); y1=Math.max(y1,ay+4); }); // 4 = hauteur d'une portée
+      const d=document.createElement("div"); d.className="susp-ov";
+      d.style.left=(off.left-hb.left+x0*u-2)+"px"; d.style.top=(off.top-hb.top+y0*u-10)+"px";
+      d.style.width=((x1-x0)*u+4)+"px"; d.style.height=((y1-y0)*u+20)+"px";
+      d.title="Mesure à vérifier : "+r.map(x=>x.who+" — "+x.why).join(" ; ");
+      host.appendChild(d);
+    });
+  }catch(e){ console.warn("surlignage", e); }
+}
+let ovTimer=null; window.addEventListener("resize",()=>{ clearTimeout(ovTimer); ovTimer=setTimeout(drawSuspectOverlays,600); });
+
+function showTab(which){
+  $("#tabScore").classList.toggle("on",which==="score"); $("#tabRoll").classList.toggle("on",which==="roll");
+  $("#scoreWrap").classList.toggle("hidden",which!=="score"); $("#rollWrap").classList.toggle("hidden",which!=="roll");
+  $("#viewHint").classList.toggle("hidden",which!=="roll");
+  osmdIdx=osmdIdx; render();
+}
+$("#tabScore").onclick=()=>showTab("score");
+$("#tabRoll").onclick=()=>showTab("roll");
+
+/* ---- boucle d'affichage ---- */
+function render(){
+  if(!S) return;
+  const q=curQ(), seg=segAt(q);
+  const mi=seg?S.measInfo[seg.m]:null;
+  $("#pos").textContent=mi?`Mesure ${mi.num}`+(S.vocalSuspects.has(seg.m)?" ⚠ à vérifier":""):"";
+  $("#pos").style.color=seg&&S.vocalSuspects.has(seg.m)?"#b35c00":"";
+  $("#bpm").textContent=`♩ = ${Math.round(bpmAt(q)*(+$("#speed").value/100))}`;
+  drawRoll(); moveOsmdCursor();
+}
+(function loop(){ if(S&&P.playing) render(); requestAnimationFrame(loop); })();
+window.addEventListener("resize",()=>render());
+
+/* ---- transport ---- */
+$("#play").onclick=()=>{ if(!S) return; if(P.playing) pause(); else {
+  const loop=loopRange(); let q=P.q; if(loop&&(q<loop.q0||q>=loop.q1)) q=loop.q0; start(q,true); } };
+$("#stop").onclick=()=>{ pause(); const loop=loopRange(); P.q=loop?loop.q0:0; render(); };
+$("#speed").oninput=e=>{ $("#speedVal").textContent=e.target.value+" %"; render(); };
+$("#speed").onchange=restartIfPlaying;
+$("#loop").onchange=()=>{ const l=loopRange(); if(l&&!P.playing){P.q=l.q0;render();} else restartIfPlaying(); };
+["#from","#to"].forEach(s=>$(s).onchange=()=>{ if($("#loop").checked){ const l=loopRange(); if(l){ if(P.playing) start(l.q0,false); else {P.q=l.q0;render();} } } });
+$("#metro").onchange=restartIfPlaying;
+$("#allOn").onclick=()=>{ S.tracks.forEach(t=>{t.solo=false;t.mute=false;t.vol=t.accomp?0.6:1;}); refreshTracks(); restartIfPlaying(); };
+$("#giveNote").onclick=()=>{
+  audio(); const was=P.playing; if(was) pause();
+  const q=P.q, now=ctx.currentTime+.05; let k=0;
+  const list=S.tracks.map((t,i)=>({t,i})).filter(o=>audible(o.t)&&!o.t.accomp).reverse(); // grave -> aigu
+  list.forEach(({t,i})=>{ const e=S.events.find(e=>e.tr===i&&e.q>=q-1e-6); if(!e) return;
+    playNote(e.midi,now+k*0.7,0.9,t.vol||1,t.instr); k++; });
+  list.forEach(({t,i})=>{ const e=S.events.find(e=>e.tr===i&&e.q>=q-1e-6); if(e) playNote(e.midi,now+k*0.7+0.1,1.6,(t.vol||1)*0.8,t.instr); });
+};
+document.addEventListener("keydown",e=>{
+  if(!S || $("#player").classList.contains("hidden") || e.code!=="Space") return;
+  const tg=e.target, tag=tg.tagName;
+  // ne pas détourner l'espace quand on écrit, ni quand un bouton / une liste a le focus (sinon double action)
+  if(tag==="TEXTAREA"||tag==="SELECT"||tag==="BUTTON"||tag==="SUMMARY"||(tag==="INPUT"&&!["range","checkbox"].includes(tg.type))) return;
+  e.preventDefault(); $("#play").click(); });
+$("#changeScore").onclick=()=>{ pause(); $("#player").classList.add("hidden"); $("#loader").classList.remove("hidden"); msg(""); };
+
+/* ---- chargement ---- */
+async function openText(xmlText){
+  pause();
+  S=parseScore(xmlText);
+  if(!S.events.length) throw new Error("Aucune note trouvée dans ce fichier.");
+  P.q=0;
+  $("#title").textContent=S.title;
+  const nm=S.measInfo.length;
+  $("#meta").innerHTML=[S.composer, nm+" mesures", S.tracks.length+" voix détectées", S.hasRepeats?"<span class='pill'>reprises jouées</span>":""].filter(Boolean).join(" · ");
+  $("#from").value=S.measInfo[0].num||1; $("#to").value=S.measInfo[Math.min(3,nm-1)].num||4;
+  buildTracks();
+  showReliability();
+  $("#loader").classList.add("hidden"); $("#player").classList.remove("hidden");
+  showTab("score"); render();
+  renderScore().then(render);
+}
+// MusicXML en UTF-8 (cas courant) ou UTF-16 avec marque d'ordre (certains exports Finale/Sibelius)
+function decodeText(u8){
+  if(u8[0]===0xFF&&u8[1]===0xFE) return new TextDecoder("utf-16le").decode(u8);
+  if(u8[0]===0xFE&&u8[1]===0xFF) return new TextDecoder("utf-16be").decode(u8);
+  if(u8[0]===0x3C&&u8[1]===0x00) return new TextDecoder("utf-16le").decode(u8);
+  if(u8[0]===0x00&&u8[1]===0x3C) return new TextDecoder("utf-16be").decode(u8);
+  return new TextDecoder("utf-8").decode(u8);
+}
+async function openFile(file){
+  msg("Lecture de « "+file.name+" »…");
+  try{
+    const buf=await file.arrayBuffer(); const u8=new Uint8Array(buf);
+    let text;
+    if(u8[0]===0x50&&u8[1]===0x4b) text=await unzipMxl(buf);
+    else if(u8[0]===0x25&&u8[1]===0x50&&u8[2]===0x44&&u8[3]===0x46) throw new Error("C'est un PDF : il faut d'abord le convertir en MusicXML (voir l'aide ci-dessous).");
+    else text=decodeText(u8);
+    await openText(text); msg("");
+  }catch(e){ console.error(e); msg(e.message||String(e),true); }
+}
+$("#file").onchange=e=>{ if(e.target.files[0]) openFile(e.target.files[0]); e.target.value=""; };
+const drop=$("#drop");
+["dragenter","dragover"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add("over");}));
+["dragleave","drop"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove("over");}));
+drop.addEventListener("drop",e=>{ const f=e.dataTransfer.files[0]; if(f) openFile(f); });
+
+/* ---- bibliothèque intégrée ---- */
+(function(){
+  let lib=[]; try{ lib=JSON.parse($("#bibliotheque").textContent||"[]"); }catch(e){}
+  if(!lib.length) return;
+  $("#libWrap").classList.remove("hidden");
+  lib.forEach(item=>{ const b=document.createElement("button"); b.textContent="♪ "+item.titre;
+    b.onclick=async()=>{ try{ msg("Chargement…");
+      let text=item.xml;
+      if(!text&&item.url){ const r=await fetch(item.url); const buf=await r.arrayBuffer(); const u8=new Uint8Array(buf);
+        text=(u8[0]===0x50&&u8[1]===0x4b)?await unzipMxl(buf):decodeText(u8); }
+      await openText(text); msg(""); }catch(e){ msg("Impossible d'ouvrir cette partition : "+(e.message||e),true); } };
+    $("#library").appendChild(b); });
+})();
+window.__test={get S(){return S;},openText,P,curQ};
+/* ---- partition transmise par la page de lecture (même site, stockage local) ---- */
+(async function(){
+  let xml=null, titre="";
+  try{ xml=localStorage.getItem("voix-musicxml"); titre=localStorage.getItem("voix-titre")||"";
+       localStorage.removeItem("voix-musicxml"); localStorage.removeItem("voix-titre"); }catch(e){}
+  if(!xml) return;
+  try{ await openText(xml); if(titre && (!S.title || S.title==="Partition")) $("#title").textContent=titre; }
+  catch(e){ msg("La partition reçue n'a pas pu être ouverte : "+(e.message||e),true); }
+})();
+</script>
+</body>
+</html>
