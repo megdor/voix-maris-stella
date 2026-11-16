@@ -16,9 +16,9 @@ const omr = useOmrState();
 
 const tab = ref(omr.result ? "score" : "photo");
 const TABS = [
-	["photo", "1 · Photos", () => true],
+	["photo", "1 · Partition", () => true],
 	["page", "2 · Pages", () => omr.pages.length > 0],
-	["score", "3 · Score", () => omr.result !== null],
+	["score", "3 · Résultat", () => omr.result !== null],
 ];
 
 watch(
@@ -65,7 +65,7 @@ const pageViews = computed(() =>
 			<PageStrip show="photo" />
 			<PhotoCorners class="big" />
 			<div class="row next">
-				<button @click="tab = 'page'">Next: {{ omr.pages.length > 1 ? "the pages" : "the page" }} →</button>
+				<button @click="tab = 'page'">Suivant : {{ omr.pages.length > 1 ? "les pages" : "la page" }} →</button>
 			</div>
 		</template>
 	</section>

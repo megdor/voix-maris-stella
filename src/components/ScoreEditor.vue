@@ -1483,6 +1483,20 @@ const ALTER_CHOICES = [
 
 // ---------------------------------------------------------------- downloads
 
+// Chœur Maris Stella : ouvre le lecteur de voix (voix.html, même site) avec cette partition.
+// La partition passe par le stockage local du navigateur : elle ne quitte pas l'appareil.
+function openVoices() {
+	try {
+		localStorage.setItem("voix-musicxml", result.value.musicXml);
+		localStorage.setItem("voix-titre", String(omr.title || "").trim());
+	} catch {
+		// stockage plein ou interdit : on passe par un fichier à déposer
+		downloadMusicXml();
+		return;
+	}
+	window.location.href = `${import.meta.env.BASE_URL ?? "/"}voix.html#depuis-lecture`;
+}
+
 function downloadMusicXml() {
 	download(
 		"score.musicxml",
@@ -1531,6 +1545,14 @@ async function downloadMidi() {
 				</button>
 			</div>
 			<div class="section" aria-label="Download">
+				<button
+					class="voices"
+					:disabled="result.summary.notes === 0"
+					title="Écouter chaque voix seule ou toutes ensemble"
+					@click="openVoices"
+				>
+					🎵 Travailler les voix
+				</button>
 				<span class="label">Download</span>
 				<button title="Download MusicXML" @click="downloadMusicXml">MusicXML</button>
 				<button class="secondary" :disabled="result.summary.notes === 0" title="Download MIDI" @click="downloadMidi">MIDI</button>
@@ -2247,5 +2269,11 @@ button.link {
 	color: var(--muted);
 	padding: 0 0.25rem;
 	cursor: pointer;
+}
+.voices {
+	background: #1f3a5f;
+	color: #fff;
+	font-weight: 600;
+	margin-right: 0.75rem;
 }
 </style>

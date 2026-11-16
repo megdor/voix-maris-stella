@@ -125,20 +125,20 @@ onBeforeUnmount(stopCamera);
 	<div class="image-source">
 		<div class="row">
 			<label class="file-label">
-				{{ omr.pages.length ? "Add images" : "Choose images" }}
-				<input type="file" accept="image/*" multiple @change="onFileChange" />
+				{{ omr.pages.length ? "Ajouter des pages" : "Choisir le PDF ou les photos" }}
+				<input type="file" accept="image/*,application/pdf" multiple @change="onFileChange" />
 			</label>
 			<button v-if="!cameraActive" class="secondary" :disabled="taking" @click="startCamera">
-				{{ omr.pages.length ? "Add a photo" : "Use camera" }}
+				{{ omr.pages.length ? "Ajouter une photo" : "Prendre une photo" }}
 			</button>
 			<template v-else>
-				<button @click="capturePhoto">Capture</button>
-				<button class="secondary" @click="stopCamera">Cancel</button>
+				<button @click="capturePhoto">Photographier</button>
+				<button class="secondary" @click="stopCamera">Annuler</button>
 			</template>
 		</div>
 		<p class="hint">
-			One image per page, several for a longer piece. Printed music, flat
-			page, even lighting, the whole page in frame. Phone photos work.
+			Un PDF, ou une photo par page. Pour une photo : page à plat, bien éclairée, entière dans
+			le cadre — l'idéal est le scanner de documents du téléphone.
 		</p>
 		<video v-if="cameraActive" ref="videoEl" autoplay playsinline></video>
 	</div>

@@ -14,7 +14,7 @@ const omr = useOmrState();
 				</option>
 			</select>
 			<button :disabled="!omr.canRun" @click="omr.run">
-				{{ omr.running ? "Restart" : "Recognize" }}{{
+				{{ omr.running ? "Recommencer" : "Lire la partition" }}{{
 					omr.pages.length > 1 ? ` ${omr.pages.length} pages` : ""
 				}}
 			</button>
@@ -34,7 +34,7 @@ const omr = useOmrState();
 					:disabled="omr.models[omr.engineId] === 'downloading'"
 					@click="omr.downloadModel(omr.engineId)"
 				>
-					{{ omr.models[omr.engineId] === "downloading" ? "Downloading…" : "Download" }}
+					{{ omr.models[omr.engineId] === "downloading" ? "Téléchargement…" : "Télécharger" }}
 				</button>
 			</template>
 		</div>

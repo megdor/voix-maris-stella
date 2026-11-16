@@ -23,7 +23,7 @@ const settings = computed(() => (omr.perPage && omr.page ? omr.page : omr));
 			For page {{ omr.currentIndex + 1 }} only.
 		</p>
 		<label class="slider">
-			<span>Lighting</span>
+			<span>Éclairage</span>
 			<input
 				v-model.number="settings.evening"
 				type="range"
@@ -42,7 +42,7 @@ const settings = computed(() => (omr.perPage && omr.page ? omr.page : omr));
 			<span class="hint">0 %: as photographed · 100 %: shadows removed</span>
 		</label>
 		<label class="slider">
-			<span>Cleaning</span>
+			<span>Nettoyage</span>
 			<input
 				v-model.number="settings.cleaning"
 				type="range"
