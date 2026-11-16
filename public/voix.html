@@ -508,7 +508,7 @@ function nameTracks(tracks, events){
   if(extra.length && full.length===1 && extra.length>=2){
     // une seule voix chante d'un bout à l'autre, le chœur par endroits (air avec chœur) : c'est la soliste
     full[0].t.name="Soliste"; voc=extra;
-  } else if(extra.length && extra.length<full.length){
+  } else if(extra.length && extra.length<=full.length){
     // une voix minoritaire qui ne chante que sur un passage (déchant…) : nommée à part
     extra.forEach((o,k)=>{ o.t.name="Voix supplémentaire"+(extra.length>1?" "+(k+1):"")+" (sur un passage)"; });
     voc=full;
@@ -547,6 +547,7 @@ function nameTracks(tracks, events){
           : neutral(ord);
   }
   ord.forEach((o,j)=>{ o.t.name=names[j]; });
+  if(ord.length===1) ord[0].t.name="Chant";   // une seule voix chantée (air, mélodie accompagnée)
   tracks.forEach(t=>{ if(t.accomp && /^(part|partie|p)\s*\d*$/i.test(t.name.trim())) t.name="Accompagnement"; });
 }
 
