@@ -54,12 +54,12 @@ const omr = useOmrState();
 				title="Retirer cette page"
 				@click="omr.removePage(omr.currentIndex)"
 			>
-				✕ Remove page {{ omr.currentIndex + 1 }}
+				✕ Retirer la page {{ omr.currentIndex + 1 }}
 			</button>
 		</div>
 		<div v-else class="actions">
 			<button class="secondary" title="Retirer cette page" @click="omr.removePage(0)">
-				✕ Remove
+				✕ Retirer
 			</button>
 		</div>
 	</div>

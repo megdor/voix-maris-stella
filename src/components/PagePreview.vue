@@ -13,12 +13,12 @@ const omr = useOmrState();
 			:src="omr.page.pageUrl"
 			class="page"
 			:class="{ stale: omr.page.flattening }"
-			alt="The page, flattened and cleaned"
+			alt="La page redressée et nettoyée"
 		/>
 		<div v-else class="page placeholder">
 			{{ omr.page.captureState === "detecting" ? "" : "Flattening…" }}
 		</div>
 		<figcaption>La page telle qu’elle sera lue.</figcaption>
-		<ExportButtons step="pages" label="Export the pages" />
+		<ExportButtons step="pages" label="Exporter les pages" />
 	</figure>
 </template>

@@ -26,13 +26,13 @@ const ready = computed(() => {
 
 const what = computed(() => {
 	const n = props.step === "score" ? 0 : omr.pages.length;
-	const files = n > 1 ? ` (${n} files)` : "";
+	const files = n > 1 ? ` (${n} fichiers)` : "";
 	return {
 		pages: [
-			`The pages as they will be recognized, as PNG${files}`,
-			"The pages as they will be recognized, as one PDF",
+			`Les pages telles qu’elles seront lues, en PNG${files}`,
+			"Les pages telles qu’elles seront lues, en un seul PDF",
 		],
-		score: ["The score as PNG, a file per A4 page", "The score as a PDF"],
+		score: ["La partition en PNG, un fichier par page A4", "La partition en PDF"],
 	}[props.step];
 });
 

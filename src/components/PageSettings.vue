@@ -39,7 +39,7 @@ const settings = computed(() => (omr.perPage && omr.page ? omr.page : omr));
 				<option value="50"></option>
 				<option value="100"></option>
 			</datalist>
-			<span class="hint">0 %: as photographed · 100 %: shadows removed</span>
+			<span class="hint">0 % : telle quelle · 100 % : ombres retirées</span>
 		</label>
 		<label class="slider">
 			<span>Nettoyage</span>
@@ -58,7 +58,7 @@ const settings = computed(() => (omr.perPage && omr.page ? omr.page : omr));
 				<option value="100"></option>
 				<option value="200"></option>
 			</datalist>
-			<span class="hint">0 %: unchanged · 100 %: scan-like · more: harsher</span>
+			<span class="hint">0 % : inchangée · 100 % : comme un scan · au-delà : plus contrasté</span>
 		</label>
 	</div>
 </template>
