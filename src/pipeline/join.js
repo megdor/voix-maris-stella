@@ -182,6 +182,62 @@ function matchParts(old, page) {
 	return out;
 }
 
+const hasNotes = (m) =>
+	childrenOf(m, "note").some((n) => childrenOf(n, "pitch").length > 0);
+
+/**
+ * Fragments of one part, made when the pages lay out their staves differently
+ * (a choir on some pages only, its staves not always in the same place): two
+ * parts that never sound in the same bar, with the same staves, the same clefs
+ * and about the same register, each present in less than 60 % of the bars,
+ * are one part: the later one's bars go into the earlier one.
+ */
+function mergeFragments(root, plist, parts) {
+	const bars = (part) => childrenOf(part, "measure");
+	const total = Math.max(1, ...parts.map((p) => bars(p).filter(hasNotes).length));
+	let merged = true;
+	while (merged) {
+		merged = false;
+		const sig = parts.map(signature);
+		const used = parts.map((p) => new Set(bars(p).map((m, i) => (hasNotes(m) ? i : -1)).filter((i) => i >= 0)));
+		outer: for (let a = 0; a < parts.length; a++) {
+			for (let b = a + 1; b < parts.length; b++) {
+				const A = sig[a];
+				const B = sig[b];
+				if (A.staves !== B.staves || used[a].size >= 0.6 * total || used[b].size >= 0.6 * total) {
+					continue;
+				}
+				if ([...A.clefs].some(([k, v]) => B.clefs.has(k) && B.clefs.get(k) !== v)) {
+					continue;
+				}
+				if (A.mean === null || B.mean === null || Math.abs(A.mean - B.mean) > 8) {
+					continue;
+				}
+				if ([...used[b]].some((i) => used[a].has(i))) {
+					continue; // they sound together: two parts
+				}
+				const ma = bars(parts[a]);
+				const mb = bars(parts[b]);
+				for (const i of used[b]) {
+					if (ma[i] && mb[i]) {
+						const at = parts[a].children.indexOf(ma[i]);
+						const m = mb[i];
+						m.set("number", attr(ma[i], "number") ?? i + 1);
+						parts[a].children[at] = m;
+					}
+				}
+				// part b leaves the score and the part list
+				root.children = root.children.filter((c) => c !== parts[b]);
+				const id = attr(parts[b], "id");
+				plist.children = plist.children.filter((c) => !(c.tag === "score-part" && attr(c, "id") === id));
+				parts.splice(b, 1);
+				merged = true;
+				break outer;
+			}
+		}
+	}
+}
+
 /**
  * The pages' trees joined into one score-partwise tree (the inputs are left
  * as they are). One page: a copy of it.
@@ -282,6 +338,7 @@ export function joinTrees(trees) {
 		});
 		measures += count;
 	}
+	mergeFragments(root, plist, parts);
 	// ids and default names in score order again (P1, P2, …)
 	const rename = new Map();
 	parts.forEach((part, n) => rename.set(attr(part, "id"), `P${n + 1}`));
