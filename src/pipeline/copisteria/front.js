@@ -609,7 +609,7 @@ function buildSystems(syms, staves, mask, ink, levels, linksModel, forced) {
 			systems.push({ staves: [k], columns: [] });
 		}
 	});
-	const mergeDiag = mergeAligned(syms, staves, systems);
+	const mergeDiag = mergeAligned(syms, staves, systems, ink, mask, forced);
 	systems.forEach((sy, n) => {
 		sy.staves.forEach((k, pos) => {
 			staves[k].system = n;
@@ -716,10 +716,44 @@ function sameBars(syms, staves, A, B, diag = []) {
 	return between <= 2.5 * Math.max(g, 2);
 }
 
-function mergeAligned(syms, staves, systems) {
+function sameCuts(syms, staves, A, B, mask, forced, diag) {
+	if (A.length < 2 || B.length < 2 || A.length + B.length < 6) {
+		return false;
+	}
+	const a = segmentCuts(syms, staves, { staves: A }, mask, forced);
+	const b = segmentCuts(syms, staves, { staves: B }, mask, forced);
+	const ia = a.xs.slice(1, -1);
+	const ib = b.xs.slice(1, -1);
+	const sp = (a.sp + b.sp) / 2;
+	diag.push({ a: ia.map(Math.round), b: ib.map(Math.round), sp: Math.round(sp) });
+	if (ia.length < 3 || ia.length !== ib.length) {
+		return false;
+	}
+	if (!ia.every((x, j) => Math.abs(x - ib[j]) <= sp)) {
+		return false;
+	}
+	const gaps = [];
+	for (const ks of [A, B]) {
+		for (let j = 1; j < ks.length; j++) {
+			gaps.push((staves[ks[j]].y0 - staves[ks[j - 1]].y1) / sp);
+		}
+	}
+	gaps.sort((x, y) => x - y);
+	const g = gaps[gaps.length >> 1];
+	const between = (staves[B[0]].y0 - staves[A[A.length - 1]].y1) / sp;
+	return between <= 2.5 * Math.max(g, 2);
+}
+
+function mergeAligned(syms, staves, systems, ink = false, mask = null, forced = null) {
 	const diag = [];
 	for (let n = 1; n < systems.length; ) {
-		if (sameBars(syms, staves, systems[n - 1].staves, systems[n].staves, diag)) {
+		const A = systems[n - 1].staves;
+		const B = systems[n].staves;
+		if (
+			ink
+				? sameCuts(syms, staves, A, B, mask, forced, diag)
+				: sameBars(syms, staves, A, B, diag)
+		) {
 			systems[n - 1].staves.push(...systems[n].staves);
 			systems.splice(n, 1);
 		} else {
@@ -1027,7 +1061,7 @@ function inkStaves(gray, syms) {
 	return staves;
 }
 
-function segment(syms, staves, sy, mask, forced) {
+function segmentCuts(syms, staves, sy, mask, forced) {
 	const S = sy.staves.map((k) => staves[k]);
 	const n = S.length;
 	const sp = S.reduce((s, st) => s + st.sp, 0) / n;
@@ -1173,6 +1207,12 @@ function segment(syms, staves, sy, mask, forced) {
 			k++;
 		}
 	}
+	return { xs, left, right, sp };
+}
+
+function segment(syms, staves, sy, mask, forced) {
+	const S = sy.staves.map((k) => staves[k]);
+	const { xs, left, right, sp } = segmentCuts(syms, staves, sy, mask, forced);
 	for (const st of S) {
 		const old = st.bars.map((i) => syms[i]);
 		const fresh = [];
