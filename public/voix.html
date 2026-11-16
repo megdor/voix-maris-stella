@@ -402,6 +402,10 @@ function parseScore(xmlText){
   splitChordTracks(tracks, events);
   nameTracks(tracks, events);
   const suspects=checkScore(measInfo, tracks, events, timeline, partNames);
+  // systèmes à la mise en page différente (portée en plus ou en moins) : voix probablement mélangées
+  { const sp=sparseMulti(parts); parts.forEach((p,i)=>{ if(!sp[i]) return;
+      barsWithNotes(p).forEach(mi=>{ const l=suspects.get(mi)||suspects.set(mi,[]).get(mi);
+        if(!l.some(x=>x.who==="Mise en page")) l.push({who:"Mise en page",why:"ce système a une portée de plus ou de moins que les autres : la lecture a pu mélanger les voix",acc:false}); }); }); }
   // carte des tempos (en noires dépliées)
   const tempos=[];
   timeline.forEach(seg=>{ (measInfo[seg.m].tempo||[]).forEach(tp=>tempos.push({q:seg.q0+tp.t,bpm:tp.bpm})); });
@@ -416,13 +420,27 @@ function parseScore(xmlText){
 // « Soprano »…). Sinon (moteurs de lecture : « Part 1 »…) : l'accompagnement est la DERNIÈRE grande portée
 // (2 portées ou plus) ayant des parties au-dessus d'elle, et tout ce qui est écrit en dessous (pédalier…).
 // Une partition chorale « fermée » sur 2 portées, seule ou au-dessus d'un piano, reste du chant.
+// numéros (index) des mesures où une partie a au moins une note
+function barsWithNotes(part){
+  const out=[]; kids(part,"measure").forEach((m,i)=>{ if([...m.querySelectorAll("note")].some(n=>!n.querySelector("rest"))) out.push(i); }); return out;
+}
+// Partie à plusieurs portées qui n'existe que sur une partie de la pièce : la lecture a trouvé, sur
+// quelques systèmes, une portée de plus (ou de moins) et a décalé les portées entre parties.
+function sparseMulti(parts){
+  const counts=parts.map(p=>barsWithNotes(p).length); const ref=Math.max(1,...counts);
+  return parts.map((p,i)=> +(txt(p,"attributes > staves")||1)>=2 && counts[i]<0.5*ref );
+}
 function accompParts(parts, partNames){
   const set=new Set();
   const name=i=>partNames[parts[i].getAttribute("id")]||"";
   const isVocal=i=>VOCAL.test(name(i)) && !ACCOMP.test(name(i));
   parts.forEach((p,i)=>{ if(ACCOMP.test(name(i))) set.add(i); });
   const multi=[]; parts.forEach((p,i)=>{ if(+(txt(p,"attributes > staves")||1)>=2 && !isVocal(i)) multi.push(i); });
-  const A=multi.length?multi[multi.length-1]:-1;
+  // le piano : la dernière grande portée présente sur toute la pièce (une grande portée qui n'apparaît
+  // que par endroits vient d'une mise en page mal lue, pas d'un instrument)
+  const sparse=sparseMulti(parts);
+  const full=multi.filter(i=>!sparse[i]);
+  const A=full.length?full[full.length-1]:(multi.length?multi[multi.length-1]:-1);
   if(A>0) for(let i=A;i<parts.length;i++) if(!isVocal(i)) set.add(i);
   return set;
 }
