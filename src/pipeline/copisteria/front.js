@@ -609,7 +609,7 @@ function buildSystems(syms, staves, mask, ink, levels, linksModel, forced) {
 			systems.push({ staves: [k], columns: [] });
 		}
 	});
-	mergeAligned(syms, staves, systems);
+	const mergeDiag = mergeAligned(syms, staves, systems);
 	systems.forEach((sy, n) => {
 		sy.staves.forEach((k, pos) => {
 			staves[k].system = n;
@@ -643,6 +643,7 @@ function buildSystems(syms, staves, mask, ink, levels, linksModel, forced) {
 			}),
 		);
 	});
+	systems.diag = mergeDiag;
 	return systems;
 }
 
@@ -684,13 +685,19 @@ function bounds(syms, staves, ks) {
 	return { sp, left, right, inner };
 }
 
-function sameBars(syms, staves, A, B) {
+function sameBars(syms, staves, A, B, diag = []) {
 	if (A.length < 2 || B.length < 2 || A.length + B.length < 6) {
 		return false;
 	}
 	const a = bounds(syms, staves, A);
 	const b = bounds(syms, staves, B);
 	const sp = (a.sp + b.sp) / 2;
+	diag.push({
+		a: a.inner.map(Math.round),
+		b: b.inner.map(Math.round),
+		sp: Math.round(sp),
+		gap: Math.round(staves[B[0]].y0 - staves[A[A.length - 1]].y1),
+	});
 	if (a.inner.length < 3 || a.inner.length !== b.inner.length) {
 		return false;
 	}
@@ -710,14 +717,16 @@ function sameBars(syms, staves, A, B) {
 }
 
 function mergeAligned(syms, staves, systems) {
+	const diag = [];
 	for (let n = 1; n < systems.length; ) {
-		if (sameBars(syms, staves, systems[n - 1].staves, systems[n].staves)) {
+		if (sameBars(syms, staves, systems[n - 1].staves, systems[n].staves, diag)) {
 			systems[n - 1].staves.push(...systems[n].staves);
 			systems.splice(n, 1);
 		} else {
 			n++;
 		}
 	}
+	return diag;
 }
 
 function jointBars(syms, staves, sy, mask) {
