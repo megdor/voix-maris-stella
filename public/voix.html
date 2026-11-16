@@ -485,8 +485,17 @@ function splitChordTracks(tracks, events){
 // on nomme d'après la tessiture. 4 voix → Soprano, Alto, Ténor, Basse ; sinon Voix 1 (aiguë)…
 function nameTracks(tracks, events){
   const generic=/^(part|partie|voice|voix|staff|p)\s*\d*$|— voix \d+$/i;
-  const voc=tracks.map((t,i)=>({t,i})).filter(o=>!o.t.accomp);
+  let voc=tracks.map((t,i)=>({t,i})).filter(o=>!o.t.accomp);
   if(!voc.length || !voc.every(o=>generic.test(o.t.name.trim()) || !o.t.name.trim())) return;
+  // une voix qui ne chante que sur un passage (déchant, soliste d'un couplet…) ne prend pas le nom
+  // d'un pupitre : elle est nommée à part, et les pupitres sont nommés sans elle
+  const segs=i=>new Set(events.filter(e=>e.tr===i).map(e=>e.seg)).size;
+  const cover=voc.map(o=>segs(o.i)); const maxC=Math.max(1,...cover);
+  const extra=voc.filter((o,k)=>cover[k]<0.4*maxC);
+  if(extra.length && extra.length<voc.length){
+    extra.forEach((o,k)=>{ o.t.name="Voix supplémentaire"+(extra.length>1?" "+(k+1):"")+" (sur un passage)"; });
+    voc=voc.filter(o=>!extra.includes(o));
+  }
   const mean=i=>{ const ev=events.filter(e=>e.tr===i); return ev.reduce((s,e)=>s+e.midi,0)/(ev.length||1); };
   // ordre de la partition (de haut en bas) ; noms SATB seulement si cet ordre va bien de l'aigu au grave,
   // sinon (soliste, voix croisées…) noms neutres dans l'ordre de la partition — modifiables par le choriste
