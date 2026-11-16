@@ -48,7 +48,7 @@ const rect = computed(() => {
 			class="zoom"
 			:viewBox="`${zoom.x} ${zoom.y} ${zoom.w} ${zoom.h}`"
 			role="img"
-			aria-label="The hovered note on the page, magnified"
+			aria-label="La note survolée, agrandie sur la page"
 		>
 			<image :href="src" :width="width" :height="height" />
 			<rect v-bind="rect" class="mark" :stroke-width="zoom.w / 250" />
@@ -60,7 +60,7 @@ const rect = computed(() => {
 			class="whole"
 			:viewBox="`0 0 ${width} ${height}`"
 			role="img"
-			aria-label="The page as recognized"
+			aria-label="La page lue"
 		>
 			<image :href="src" :width="width" :height="height" />
 			<rect v-if="zoom" v-bind="zoom" class="window" />

@@ -63,7 +63,7 @@ async function run(format) {
 			:title="what[0]"
 			@click="run('png')"
 		>
-			{{ busy === "png" ? "Exporting…" : `${arrows ? "⬇ " : ""}PNG` }}
+			{{ busy === "png" ? "Export…" : `${arrows ? "⬇ " : ""}PNG` }}
 		</button>
 		<button
 			class="secondary"
@@ -71,7 +71,7 @@ async function run(format) {
 			:title="what[1]"
 			@click="run('pdf')"
 		>
-			{{ busy === "pdf" ? "Exporting…" : `${arrows ? "⬇ " : ""}PDF` }}
+			{{ busy === "pdf" ? "Export…" : `${arrows ? "⬇ " : ""}PDF` }}
 		</button>
 		<span v-if="error" class="error">{{ error }}</span>
 	</div>

@@ -17,16 +17,16 @@ const omr = useOmrState();
 			@commit="omr.onCornersCommit"
 		/>
 		<figcaption>
-			<template v-if="omr.page.captureState === 'detecting'">Looking for the page…</template>
-			<template v-else-if="omr.page.captureState === 'found'">Page found. Drag the corners to adjust.</template>
-			<template v-else-if="omr.page.captureState === 'not-found'">No page found. Drag the corners onto the page's corners.</template>
-			<template v-else-if="omr.page.captureState === 'error'">Page detection unavailable ({{ omr.page.captureError }}). Drag the corners onto the page's corners.</template>
+			<template v-if="omr.page.captureState === 'detecting'">Recherche de la page…</template>
+			<template v-else-if="omr.page.captureState === 'found'">Page trouvée. Déplacez les coins pour ajuster si besoin.</template>
+			<template v-else-if="omr.page.captureState === 'not-found'">Page non trouvée : placez les coins sur les coins de la page.</template>
+			<template v-else-if="omr.page.captureState === 'error'">Détection de la page indisponible ({{ omr.page.captureError }}) : placez les coins sur les coins de la page.</template>
 		</figcaption>
 		<div class="row">
 			<button class="secondary" :disabled="!omr.page.detectedQuad" @click="omr.resetCorners">
-				Reset corners
+				Coins détectés
 			</button>
-			<button class="secondary" @click="omr.useWholePhoto">Whole photo</button>
+			<button class="secondary" @click="omr.useWholePhoto">Photo entière</button>
 		</div>
 	</figure>
 </template>

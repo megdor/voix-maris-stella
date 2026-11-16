@@ -18,7 +18,7 @@ const omr = useOmrState();
 		<div v-else class="page placeholder">
 			{{ omr.page.captureState === "detecting" ? "" : "Flattening…" }}
 		</div>
-		<figcaption>The page as it will be recognized.</figcaption>
+		<figcaption>La page telle qu’elle sera lue.</figcaption>
 		<ExportButtons step="pages" label="Export the pages" />
 	</figure>
 </template>

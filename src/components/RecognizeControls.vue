@@ -3,12 +3,30 @@
 import { useOmrState } from "../useOmr.js";
 
 const omr = useOmrState();
+// libellés de progression en français (le moteur les produit en anglais)
+const FR = [
+	[/^starting$/, "Démarrage…"],
+	[/^downloading (.+)$/, "Téléchargement du moteur de lecture (une seule fois)…"],
+	[/^initializing (.+)$/, "Préparation du moteur…"],
+	[/^detecting symbols$/, "Repérage des notes et des symboles…"],
+	[/^reading in context$/, "Lecture mesure par mesure…"],
+	[/^writing MusicXML$/, "Écriture de la partition…"],
+	[/^done$/, "Terminé"],
+];
+function fr(stage) {
+	if (!stage) return "";
+	const m = /^(Page \d+\/\d+ · )(.*)$/.exec(stage);
+	const head = m ? m[1] : "";
+	const body = m ? m[2] : stage;
+	for (const [re, out] of FR) if (re.test(body)) return head + out;
+	return stage;
+}
 </script>
 
 <template>
 	<div class="recognize-controls">
 		<div class="row">
-			<select v-model="omr.engineId" aria-label="Recognizer">
+			<select v-model="omr.engineId" aria-label="Moteur de lecture">
 				<option v-for="engine in omr.engines" :key="engine.id" :value="engine.id">
 					{{ engine.name }}
 				</option>
@@ -18,7 +36,7 @@ const omr = useOmrState();
 					omr.pages.length > 1 ? ` ${omr.pages.length} pages` : ""
 				}}
 			</button>
-			<button v-if="omr.running" class="secondary" @click="omr.stop">Stop</button>
+			<button v-if="omr.running" class="secondary" @click="omr.stop">Arrêter</button>
 		</div>
 		<!-- in the app: the high-accuracy models are an optional download -->
 		<div v-if="omr.isApp && omr.models[omr.engineId] !== undefined && omr.engineId !== '2m'" class="row model">
@@ -42,13 +60,13 @@ const omr = useOmrState();
 			<div class="progress">
 				<div :style="{ width: `${Math.round(omr.modelProgress.ratio * 100)}%` }"></div>
 			</div>
-			<p class="progress-label">{{ omr.modelProgress.stage }}</p>
+			<p class="progress-label">{{ fr(omr.modelProgress.stage) }}</p>
 		</template>
 		<template v-if="omr.progress">
 			<div class="progress">
 				<div :style="{ width: `${Math.round(omr.progress.ratio * 100)}%` }"></div>
 			</div>
-			<p class="progress-label">{{ omr.progress.stage }}</p>
+			<p class="progress-label">{{ fr(omr.progress.stage) }}</p>
 		</template>
 		<p v-if="omr.error" class="error">{{ omr.error }}</p>
 	</div>

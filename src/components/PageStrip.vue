@@ -36,7 +36,7 @@ const omr = useOmrState();
 			<button
 				class="secondary"
 				:disabled="omr.currentIndex === 0"
-				title="Move this page earlier"
+				title="Avancer cette page"
 				@click="omr.movePage(omr.currentIndex, -1)"
 			>
 				◀ Earlier
@@ -44,21 +44,21 @@ const omr = useOmrState();
 			<button
 				class="secondary"
 				:disabled="omr.currentIndex === omr.pages.length - 1"
-				title="Move this page later"
+				title="Reculer cette page"
 				@click="omr.movePage(omr.currentIndex, 1)"
 			>
 				Later ▶
 			</button>
 			<button
 				class="secondary"
-				title="Remove this page"
+				title="Retirer cette page"
 				@click="omr.removePage(omr.currentIndex)"
 			>
 				✕ Remove page {{ omr.currentIndex + 1 }}
 			</button>
 		</div>
 		<div v-else class="actions">
-			<button class="secondary" title="Remove this page" @click="omr.removePage(0)">
+			<button class="secondary" title="Retirer cette page" @click="omr.removePage(0)">
 				✕ Remove
 			</button>
 		</div>
