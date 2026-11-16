@@ -28,16 +28,17 @@ provide("omr", omr);
 	</template>
 	<div v-else class="app">
 		<header>
-			<h1>🎼 MusicOCR</h1>
+			<h1>🎼 Chœur Maris Stella — Lire une partition</h1>
 			<p>
-				Sheet music → MusicXML, entirely in your browser. No image ever
-				leaves your device.
+				Déposez le PDF ou les photos d'une partition : elle est lue dans votre navigateur,
+				rien n'est envoyé. Puis « 🎵 Travailler les voix ».
+				<a href="voix.html">Ouvrir le lecteur de voix</a>
 			</p>
 		</header>
 		<StepTabs />
 		<footer>
 			<details>
-				<summary>About &amp; licences</summary>
+				<summary>À propos et licences (MusicOCR, copista…)</summary>
 				<AboutText />
 			</details>
 		</footer>
