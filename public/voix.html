@@ -359,9 +359,10 @@ function parseScore(xmlText){
           const d=(+txt(el,"duration")||0)/div;
           const start=isChord?lastStart:t;
           if(!isChord){ lastStart=t; t+=d; maxT=Math.max(maxT,t);
-            // durée cumulée par voix, pour le contrôle de fiabilité
+            // durée de chaque voix, pour le contrôle de fiabilité : là où finit sa dernière note dans la mesure
+            // (une voix dont les silences sont écrits en « forward », sans silence visible, reste juste)
             const vk=pid+"|"+(txt(el,"voice")||"1"); info.vd=info.vd||{};
-            (info.vd[vk]=info.vd[vk]||{d:0,exp:beats*4/beatType,acc:accomp,pid}).d+=d; }
+            const vv=(info.vd[vk]=info.vd[vk]||{d:0,exp:beats*4/beatType,acc:accomp,pid}); vv.d=Math.max(vv.d,t); }
           if(m.getAttribute("implicit")==="yes") info.implicit=true;
           if(el.querySelector("rest")||isCue) continue;
           const step=txt(el,"pitch > step"); if(!step) continue;
@@ -580,6 +581,8 @@ function nameTracks(tracks, events){
     const staves=L=>new Set(L.map(o=>o.t.staffKey)).size;
     const wN = W.length===2 && step(W,1,2.5) ? ["Soprano","Alto"]
              : W.length===3 && staves(W)===3 && M.length>=2 && step(W,1,1.5)&&step(W,2,2.5) ? ["Soprano 1","Soprano 2","Alto"]
+             : W.length===3 && W[1].t.staffKey===W[2].t.staffKey && W[0].t.staffKey!==W[1].t.staffKey && M.length>=1
+               ? ["Soliste","Soprano","Alto"]   // une portée seule au-dessus de la portée des femmes (S + A) : la soliste
              : W.length===1 ? ["Femmes"]
              : neutral(W).map(n=>n.replace(/^Voix/,"Voix de femmes"));
     const mN = M.length===2 && step(M,1,2.5) ? ["Ténor","Basse"]
