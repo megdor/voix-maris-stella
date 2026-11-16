@@ -767,8 +767,9 @@ async function renderScore(){
   osmd=null; osmdSteps=null; osmdIdx=-1;
   try{
     await loadOsmdLib();
-    osmd=new opensheetmusicdisplay.OpenSheetMusicDisplay("osmd",{autoResize:true,backend:"svg",drawTitle:true,drawPartNames:true,followCursor:false});
-    await osmd.load(displayXml(S.xml, S.tracks, $("#title").textContent)); osmd.render();
+    const shownTitle=$("#title").textContent||""; const hasTitle=!!shownTitle.trim() && !GENERIC_TITLE.test(shownTitle.trim());
+    osmd=new opensheetmusicdisplay.OpenSheetMusicDisplay("osmd",{autoResize:true,backend:"svg",drawTitle:hasTitle,drawSubtitle:hasTitle,drawPartNames:true,followCursor:false});
+    await osmd.load(displayXml(S.xml, S.tracks, shownTitle)); osmd.render();
     osmd.cursor.show();
     // inventaire des positions du curseur : (mesure, position en noires dans la mesure)
     osmdSteps=[]; const c=osmd.cursor; c.reset(); let guard=0;
