@@ -394,7 +394,8 @@ function parseScore(xmlText){
     keys.forEach(k=>{
       const v=vd[k]; if(v.acc || v.d>=v.exp-0.01 || v.d<=0.001) return;
       const [pid]=k.split("|");
-      const mine=raw.filter(n=>n.m===mi && n.key===k); const staff=mine.length?mine[mine.length-1].staff:null;
+      const mine=raw.filter(n=>n.m===mi && n.key===k);
+      const staff=mine.length?mine[mine.length-1].staff:((raw.find(n=>n.key===k)||{}).staff||"1"); // voix muette dans la mesure : sa portée habituelle
       // une autre voix de la même portée, complète, qui couvre la fin
       const other=keys.find(o=>o!==k && o.split("|")[0]===pid && !vd[o].acc && Math.abs(vd[o].d-v.exp)<0.01 &&
         raw.some(n=>n.m===mi && n.key===o && n.staff===staff));
