@@ -285,16 +285,16 @@ const selectedGroup = computed(
 		groups.value.find((g) => groupKey(g) === selectedGroupKey.value) ?? null,
 );
 const SYMBOL_NAMES = {
-	brace: "Brace",
-	bracket: "Bracket",
-	square: "Square",
-	line: "Line",
-	none: "None",
+	brace: "Accolade",
+	bracket: "Crochet",
+	square: "Carré",
+	line: "Trait",
+	none: "Aucun",
 };
 const partsName = (g) =>
 	g.first === g.last
-		? `part ${g.first + 1}`
-		: `parts ${g.first + 1}–${g.last + 1}`;
+		? `partie ${g.first + 1}`
+		: `parties ${g.first + 1}–${g.last + 1}`;
 
 /** The group a bracket drawn on the score (a "grpSym" element) shows. */
 function groupOfSym(el) {
@@ -435,34 +435,34 @@ const partGroupsOf = (k) =>
 // on its own: changed or deleted.
 
 const CLEF_CHOICES = [
-	["G2", "Treble"],
-	["F4", "Bass"],
-	["C3", "Alto"],
-	["C4", "Tenor"],
-	["G2_8b", "Treble 8vb"],
+	["G2", "Sol"],
+	["F4", "Fa"],
+	["C3", "Ut 3e (alto)"],
+	["C4", "Ut 4e (ténor)"],
+	["G2_8b", "Sol 8 en bas (ténor)"],
 ];
 const MORE_CLEFS = [
-	["C1", "Soprano (C1)"],
-	["C2", "Mezzo-soprano (C2)"],
-	["C5", "Baritone (C5)"],
-	["F3", "Baritone (F3)"],
-	["F5", "Sub-bass (F5)"],
-	["G1", "French violin (G1)"],
-	["G2_8a", "Treble 8va"],
-	["G2_15b", "Treble 15mb"],
-	["G2_15a", "Treble 15ma"],
-	["F4_8b", "Bass 8vb"],
-	["F4_8a", "Bass 8va"],
-	["F4_15b", "Bass 15mb"],
-	["F4_15a", "Bass 15ma"],
+	["C1", "Ut 1re (C1)"],
+	["C2", "Ut 2e (C2)"],
+	["C5", "Ut 5e (C5)"],
+	["F3", "Fa 3e (F3)"],
+	["F5", "Fa 5e (F5)"],
+	["G1", "Sol 1re (G1)"],
+	["G2_8a", "Sol 8 en haut"],
+	["G2_15b", "Sol 15 en bas"],
+	["G2_15a", "Sol 15 en haut"],
+	["F4_8b", "Fa 8 en bas"],
+	["F4_8a", "Fa 8 en haut"],
+	["F4_15b", "Fa 15 en bas"],
+	["F4_15a", "Fa 15 en haut"],
 	["perc", "Percussion"],
 ];
 const CLEF_NAMES = Object.fromEntries([...CLEF_CHOICES, ...MORE_CLEFS]);
 const KEYS = Array.from({ length: 15 }, (_, i) => i - 7);
-const MAJOR = "C♭ G♭ D♭ A♭ E♭ B♭ F C G D A E B F♯ C♯".split(" ");
-const MINOR = "A♭ E♭ B♭ F C G D A E B F♯ C♯ G♯ D♯ A♯".split(" ");
+const MAJOR = "do♭ sol♭ ré♭ la♭ mi♭ si♭ fa do sol ré la mi si fa♯ do♯".split(" ");
+const MINOR = "la♭ mi♭ si♭ fa do sol ré la mi si fa♯ do♯ sol♯ ré♯ la♯".split(" ");
 const keyLabel = (f) => (f === 0 ? "♮" : f > 0 ? `${f}♯` : `${-f}♭`);
-const keyTitle = (f) => `${MAJOR[f + 7]} major / ${MINOR[f + 7]} minor`;
+const keyTitle = (f) => `${MAJOR[f + 7]} majeur / ${MINOR[f + 7]} mineur`;
 
 const selectedStaff = ref(null); // a staff's place in the systems (0: top)
 const selectedClefKey = ref(null); // a clef within a bar
@@ -820,10 +820,13 @@ function alongLine(key, step) {
 	return at < 0 ? null : (line[at + step] ?? null);
 }
 
+// nom de note en français (do3 = do du milieu du piano)
+const SOLFEGE = { C: "do", D: "ré", E: "mi", F: "fa", G: "sol", A: "la", B: "si" };
 const pitchName = (s) =>
 	s?.pitch
-		? `${s.pitch.step}${ACCIDENTALS[s.pitch.alter] ?? ""}${s.pitch.octave}`
+		? `${SOLFEGE[s.pitch.step] ?? s.pitch.step}${ACCIDENTALS[s.pitch.alter] ?? ""}${s.pitch.octave - 1}`
 		: "?";
+const VALUE_FR = { whole: "ronde", half: "blanche", quarter: "noire", eighth: "croche", "16th": "double croche", "32nd": "triple croche", "64th": "quadruple croche", breve: "carrée" };
 const samePitch = (a, b) =>
 	!!a?.pitch &&
 	!!b?.pitch &&
@@ -882,8 +885,8 @@ const noteSpans = computed(() => {
 
 const HAIRPIN_KINDS = new Set(["cres", "dim"]);
 const KIND_NAMES = {
-	tie: "Tie",
-	slur: "Slur",
+	tie: "Liaison de prolongation",
+	slur: "Liaison",
 	cres: "Crescendo",
 	dim: "Diminuendo",
 };
@@ -919,9 +922,9 @@ function endPick(to) {
 	const what = KIND_NAMES[kind];
 	picking.value = null;
 	if (to.family !== "note" || to.key === from.key) {
-		pickHint.value = `A ${what.toLowerCase()} ends on another note.`;
+		pickHint.value = `${what} : cliquez une autre note pour la fin.`;
 	} else if (to.page !== from.page) {
-		pickHint.value = `A ${what.toLowerCase()} starts and ends on the same page.`;
+		pickHint.value = `${what} : le début et la fin doivent être sur la même page.`;
 	} else {
 		addSpan(kind, from, to);
 	}
@@ -1351,7 +1354,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
 // ---------------------------------------------------------------- display
 
 const ACCIDENTALS = { "-2": "𝄫", "-1": "♭", 0: "", 1: "♯", 2: "𝄪" };
-const DOTS = ["", " dotted", " double-dotted"];
+const DOTS = ["", " pointée", " doublement pointée"];
 
 function describe(s) {
 	const where = props.pages.length > 1 ? ` · page ${s.page + 1}` : "";
@@ -1367,22 +1370,21 @@ function describeBase(s) {
 	if (s.family === "dynamic") {
 		const name = DYNAMIC_NAMES[s.value];
 		const at = pitchName(byKey.value.get(s.at));
-		return `Dynamic ${s.value}${name ? ` (${name})` : ""} · at ${at}`;
+		return `Nuance ${s.value}${name ? ` (${name})` : ""} · sur ${at}`;
 	}
 	if (SPAN_FAMILIES.has(s.family)) {
 		const from = byKey.value.get(s.from);
 		const to = byKey.value.get(s.to);
 		return `${KIND_NAMES[s.kind]} · ${pitchName(from)} → ${pitchName(to)}`;
 	}
-	const length = `${value(s)}${DOTS[s.dots] ?? ""}`;
+	const length = `${VALUE_FR[value(s)] ?? value(s)}${DOTS[s.dots] ?? ""}`;
 	if (s.family === "rest") {
-		return `${length} rest`;
+		return `Silence (${length})`;
 	}
 	if (!s.pitch) {
-		return `${length} note`;
+		return `Note : ${length}`;
 	}
-	const { step, octave, alter } = s.pitch;
-	return `${step}${ACCIDENTALS[alter] ?? ""}${octave} · ${length} note`;
+	return `${pitchName(s)} · ${length}`;
 }
 
 const fitHint = computed(() => {
@@ -1391,10 +1393,10 @@ const fitHint = computed(() => {
 		return null;
 	}
 	if (!s.written) {
-		return "Not on the score: its bar is already full (shorten or delete another note there), or it is outside any bar.";
+		return "Absente de la partition : sa mesure est déjà pleine (raccourcissez ou supprimez une autre note), ou elle est hors mesure.";
 	}
 	if (s.written.type !== value(s) || s.written.dots !== s.dots) {
-		return `Too long for its bar: written as ${s.written.type}${DOTS[s.written.dots] ?? ""}.`;
+		return `Trop longue pour sa mesure : écrite en ${VALUE_FR[s.written.type] ?? s.written.type}${DOTS[s.written.dots] ?? ""}.`;
 	}
 	return null;
 });
@@ -1403,11 +1405,11 @@ const fitHint = computed(() => {
 const PICKS = [
 	[
 		"slur",
-		"+ Slur to…",
-		"Add a slur or phrase mark: then click the note it ends on",
+		"+ Liaison jusqu’à…",
+		"Ajouter une liaison : cliquez ensuite la note de fin",
 	],
-	["cres", "+ Cresc. to…", "Add a crescendo: then click the note it ends on"],
-	["dim", "+ Dim. to…", "Add a diminuendo: then click the note it ends on"],
+	["cres", "+ Cresc. jusqu’à…", "Ajouter un crescendo : cliquez ensuite la note de fin"],
+	["dim", "+ Dim. jusqu’à…", "Ajouter un diminuendo : cliquez ensuite la note de fin"],
 ];
 
 // articulations offered: [class, label, title]
@@ -1427,21 +1429,21 @@ const ARTIC_EXCLUDES = {
 
 // tuplets offered: [value (see TUPLETS), label, title]
 const TUP_CHOICES = [
-	["none", "No tuplet", "Not in a tuplet"],
-	["3/2", "3", "Triplet: 3 in the time of 2 (t)"],
-	["2/3", "2", "Duplet: 2 in the time of 3"],
-	["4/3", "4", "Quadruplet: 4 in the time of 3"],
-	["5/4", "5", "Quintuplet: 5 in the time of 4"],
-	["6/4", "6", "Sextuplet: 6 in the time of 4"],
-	["7/4", "7", "Septuplet: 7 in the time of 4"],
+	["none", "Aucun", "Pas de n-olet"],
+	["3/2", "3", "Triolet : 3 dans le temps de 2 (t)"],
+	["2/3", "2", "Duolet : 2 dans le temps de 3"],
+	["4/3", "4", "Quartolet : 4 dans le temps de 3"],
+	["5/4", "5", "Quintolet : 5 dans le temps de 4"],
+	["6/4", "6", "Sextolet : 6 dans le temps de 4"],
+	["7/4", "7", "Septolet : 7 dans le temps de 4"],
 ];
 const TUP_NAMES = {
-	"3/2": "triplet",
-	"2/3": "duplet",
-	"4/3": "quadruplet",
-	"5/4": "quintuplet",
-	"6/4": "sextuplet",
-	"7/4": "septuplet",
+	"3/2": "triolet",
+	"2/3": "duolet",
+	"4/3": "quartolet",
+	"5/4": "quintolet",
+	"6/4": "sextolet",
+	"7/4": "septolet",
 };
 
 // dynamics offered (see write.js DYN)
@@ -1475,10 +1477,10 @@ const DYNAMIC_NAMES = {
 };
 
 const ALTER_CHOICES = [
-	["key", "Key", "As the key signature (k)"],
-	[-1, "♭", "Flat (b)"],
-	[0, "♮", "Natural (n)"],
-	[1, "♯", "Sharp (s or #)"],
+	["key", "Armure", "Comme l’armure (k)"],
+	[-1, "♭", "Bémol (b)"],
+	[0, "♮", "Bécarre (n)"],
+	[1, "♯", "Dièse (s ou #)"],
 ];
 
 // ---------------------------------------------------------------- downloads
@@ -1525,11 +1527,11 @@ async function downloadMidi() {
 			</label>
 		</div>
 		<div class="toolbar">
-			<span class="summary" :title="`${result.summary.staves} staves in ${result.summary.systems} systems; ${result.summary.changed} corrected from context`">
+			<span class="summary" :title="`${result.summary.staves} portées en ${result.summary.systems} systèmes ; ${result.summary.changed} corrigées d’après le contexte`">
 				<template v-if="pages.length > 1">{{ pages.length }} pages · </template>
 				{{ result.summary.notes }} notes, {{ result.summary.rests }} silences<template v-if="result.summary.edited"> · {{ result.summary.edited }} corrigées</template>
 			</span>
-			<div class="section" aria-label="Edit">
+			<div class="section" aria-label="Corriger">
 				<div class="group">
 					<button class="secondary" :disabled="!ops.length" title="Annuler (Ctrl+Z)" @click="undo">↶ Annuler</button>
 					<button class="secondary" :disabled="!undone.length" title="Rétablir (Ctrl+Maj+Z)" @click="redo">↷ Rétablir</button>
@@ -1544,7 +1546,7 @@ async function downloadMidi() {
 					{{ adding ? "Fin de l'ajout" : "+ Ajouter des notes oubliées" }}
 				</button>
 			</div>
-			<div class="section" aria-label="Download">
+			<div class="section" aria-label="Télécharger">
 				<button
 					class="voices"
 					:disabled="result.summary.notes === 0"
@@ -1566,12 +1568,11 @@ async function downloadMidi() {
 				</span>
 				<span v-else-if="editError" class="error">{{ editError }}</span>
 				<span v-else-if="unplaced" class="status">
-					{{ unplaced }} added symbol{{ unplaced > 1 ? "s" : "" }} could not be
-					placed in a bar.
+					{{ unplaced }} symbole{{ unplaced > 1 ? "s" : "" }} ajouté{{ unplaced > 1 ? "s" : "" }} hors de toute mesure.
 				</span>
 				<span v-else-if="picking" class="status">
-					Click the note the {{ KIND_NAMES[picking.kind].toLowerCase() }} ends on
-					(Esc: cancel).
+					Cliquez la note où finit : {{ KIND_NAMES[picking.kind].toLowerCase() }}
+					(Échap : annuler).
 				</span>
 				<span v-else-if="pickHint" class="error">{{ pickHint }}</span>
 				<span v-else class="hint">
@@ -1618,25 +1619,25 @@ async function downloadMidi() {
 				<div v-if="selectedPart !== null && !selected" class="note-editor">
 					<div class="note-title">
 						<strong>Part {{ selectedPart + 1 }}{{ partStaves.length > 1 ? ` of ${partStaves.length}` : "" }}</strong>
-						<button class="link" title="Deselect (Esc)" @click="selectedPart = null">✕</button>
+						<button class="link" title="Désélectionner (Échap)" @click="selectedPart = null">✕</button>
 					</div>
 					<div class="rows">
-						<span class="label">Name</span>
+						<span class="label">Nom</span>
 						<div class="group">
 							<input
 								v-model="partDraft"
 								class="part-name"
 								type="text"
-								placeholder="No name"
-								aria-label="Part name"
+								placeholder="Sans nom"
+								aria-label="Nom de la partie"
 								@change="namePart"
 								@keydown.enter="namePart"
 							/>
 						</div>
 					</div>
 					<div class="rows">
-						<span class="label">Brackets</span>
-						<div class="group" aria-label="Brackets">
+						<span class="label">Accolades</span>
+						<div class="group" aria-label="Accolades">
 							<button
 								v-for="g in partGroupsOf(selectedPart)"
 								:key="groupKey(g)"
@@ -1650,16 +1651,16 @@ async function downloadMidi() {
 							</button>
 						</div>
 					</div>
-					<p class="hint">The name is printed at the left of the first system. Leave it empty to print no name.</p>
+					<p class="hint">Le nom s’affiche à gauche du premier système. Laissez vide pour ne rien afficher.</p>
 				</div>
 				<div v-if="selectedStaff !== null && !selected" class="note-editor">
 					<div class="note-title">
 						<strong>Staff {{ selectedStaff + 1 }} · clef and key</strong>
-						<button class="link" title="Deselect (Esc)" @click="selectedStaff = null">✕</button>
+						<button class="link" title="Désélectionner (Échap)" @click="selectedStaff = null">✕</button>
 					</div>
 					<div class="rows">
-						<span class="label">Clef</span>
-						<div class="group" aria-label="Clef">
+						<span class="label">Clé</span>
+						<div class="group" aria-label="Clé">
 							<button
 								v-for="[name, text] in CLEF_CHOICES"
 								:key="name"
@@ -1670,15 +1671,15 @@ async function downloadMidi() {
 							</button>
 							<select
 								:value="isMoreClef(clefsNow[selectedStaff]) ? clefsNow[selectedStaff] : ''"
-								aria-label="Other clefs"
+								aria-label="Autres clés"
 								@change="setStaffClef($event.target.value)"
 							>
-								<option value="" disabled>More…</option>
+								<option value="" disabled>Autres…</option>
 								<option v-for="[name, text] in MORE_CLEFS" :key="name" :value="name">{{ text }}</option>
 							</select>
 						</div>
-						<span class="label">Key</span>
-						<div class="group key-choices" aria-label="Key signature">
+						<span class="label">Armure</span>
+						<div class="group key-choices" aria-label="Armure">
 							<button
 								v-for="f in KEYS"
 								:key="f"
@@ -1691,19 +1692,19 @@ async function downloadMidi() {
 						</div>
 					</div>
 					<p class="hint">
-						The clef is set for this staff, the key for all staves, both in the
-						whole score ({{ keyTitle(keyNow) }} now). The notes keep their place on the
-						staff: their pitches follow.
+						La clé vaut pour cette portée, l’armure pour toutes les portées, sur toute
+						la partition ({{ keyTitle(keyNow) }} actuellement). Les notes gardent leur place
+						sur la portée : leur hauteur suit.
 					</p>
 				</div>
 				<div v-if="selectedClef && !selected" class="note-editor">
 					<div class="note-title">
 						<strong>Clef change · {{ CLEF_NAMES[selectedClef.cls.slice(5)] ?? selectedClef.cls.slice(5) }}</strong>
-						<button class="link" title="Deselect (Esc)" @click="selectedClefKey = null">✕</button>
+						<button class="link" title="Désélectionner (Échap)" @click="selectedClefKey = null">✕</button>
 					</div>
 					<div class="rows">
-						<span class="label">Clef</span>
-						<div class="group" aria-label="Clef">
+						<span class="label">Clé</span>
+						<div class="group" aria-label="Clé">
 							<button
 								v-for="[name, text] in CLEF_CHOICES"
 								:key="name"
@@ -1714,27 +1715,27 @@ async function downloadMidi() {
 							</button>
 							<select
 								:value="isMoreClef(selectedClef.cls.slice(5)) ? selectedClef.cls.slice(5) : ''"
-								aria-label="Other clefs"
+								aria-label="Autres clés"
 								@change="setMidClef($event.target.value)"
 							>
-								<option value="" disabled>More…</option>
+								<option value="" disabled>Autres…</option>
 								<option v-for="[name, text] in MORE_CLEFS" :key="name" :value="name">{{ text }}</option>
 							</select>
 						</div>
 					</div>
 					<p class="hint">A clef change within a bar: from here to the next clef.</p>
 					<div class="actions">
-						<button class="danger" title="Delete this clef change" @click="deleteMidClef">Delete</button>
+						<button class="danger" title="Supprimer ce changement de clé" @click="deleteMidClef">Supprimer</button>
 					</div>
 				</div>
 				<div v-if="selectedMeter !== null && !selected" class="note-editor">
 					<div class="note-title">
 						<strong>Time signature · bar {{ selectedMeter + 1 }}</strong>
-						<button class="link" title="Deselect (Esc)" @click="selectedMeter = null">✕</button>
+						<button class="link" title="Désélectionner (Échap)" @click="selectedMeter = null">✕</button>
 					</div>
 					<div class="rows">
-						<span class="label">Time</span>
-						<div class="group" aria-label="Time signature">
+						<span class="label">Mesure</span>
+						<div class="group" aria-label="Chiffrage">
 							<button
 								v-for="t in TIME_CHOICES"
 								:key="t"
@@ -1745,10 +1746,10 @@ async function downloadMidi() {
 							</button>
 							<select
 								:value="MORE_TIMES.includes(metersNow[selectedMeter]) ? metersNow[selectedMeter] : ''"
-								aria-label="Other time signatures"
+								aria-label="Autres chiffrages"
 								@change="setMeter($event.target.value)"
 							>
-								<option value="" disabled>More…</option>
+								<option value="" disabled>Autres…</option>
 								<option v-for="t in MORE_TIMES" :key="t" :value="t">{{ t }}</option>
 							</select>
 						</div>
@@ -1761,11 +1762,11 @@ async function downloadMidi() {
 				<div v-if="selectedGroup && !selected" class="note-editor">
 					<div class="note-title">
 						<strong>{{ SYMBOL_NAMES[selectedGroup.symbol] }} · {{ partsName(selectedGroup) }}</strong>
-						<button class="link" title="Deselect (Esc)" @click="selectedGroupKey = null">✕</button>
+						<button class="link" title="Désélectionner (Échap)" @click="selectedGroupKey = null">✕</button>
 					</div>
 					<div class="rows">
-						<span class="label">Shape</span>
-						<div class="group" aria-label="Shape">
+						<span class="label">Forme</span>
+						<div class="group" aria-label="Forme">
 							<button
 								v-for="sym in GROUP_SYMBOLS"
 								:key="sym"
@@ -1775,37 +1776,37 @@ async function downloadMidi() {
 								{{ SYMBOL_NAMES[sym] }}
 							</button>
 						</div>
-						<span class="label">Top</span>
+						<span class="label">Haut</span>
 						<div class="group" aria-label="Top">
-							<button title="Start a part higher" :disabled="!canMoveGroup('first', -1)" @click="moveGroupEnd('first', -1)">▲</button>
-							<button title="Start a part lower" :disabled="!canMoveGroup('first', 1)" @click="moveGroupEnd('first', 1)">▼</button>
+							<button title="Commencer une partie plus haut" :disabled="!canMoveGroup('first', -1)" @click="moveGroupEnd('first', -1)">▲</button>
+							<button title="Commencer une partie plus bas" :disabled="!canMoveGroup('first', 1)" @click="moveGroupEnd('first', 1)">▼</button>
 							<span class="hint">part {{ selectedGroup.first + 1 }}</span>
 						</div>
-						<span class="label">Bottom</span>
-						<div class="group" aria-label="Bottom">
-							<button title="End a part higher" :disabled="!canMoveGroup('last', -1)" @click="moveGroupEnd('last', -1)">▲</button>
-							<button title="End a part lower" :disabled="!canMoveGroup('last', 1)" @click="moveGroupEnd('last', 1)">▼</button>
+						<span class="label">Bas</span>
+						<div class="group" aria-label="Bas">
+							<button title="Finir une partie plus haut" :disabled="!canMoveGroup('last', -1)" @click="moveGroupEnd('last', -1)">▲</button>
+							<button title="Finir une partie plus bas" :disabled="!canMoveGroup('last', 1)" @click="moveGroupEnd('last', 1)">▼</button>
 							<span class="hint">part {{ selectedGroup.last + 1 }}</span>
 						</div>
-						<span class="label">Bar lines</span>
-						<div class="group" aria-label="Bar lines">
-							<button :aria-pressed="selectedGroup.barline" title="Bar lines through all its staves" @click="setGroup('barline', true)">Through</button>
-							<button :aria-pressed="!selectedGroup.barline" title="Bar lines on each staff only" @click="setGroup('barline', false)">Per staff</button>
+						<span class="label">Barres de mesure</span>
+						<div class="group" aria-label="Barres de mesure">
+							<button :aria-pressed="selectedGroup.barline" title="Barres traversant toutes ses portées" @click="setGroup('barline', true)">Traversantes</button>
+							<button :aria-pressed="!selectedGroup.barline" title="Barres sur chaque portée seulement" @click="setGroup('barline', false)">Par portée</button>
 						</div>
 					</div>
 					<div class="actions">
-						<button class="danger" title="Delete this bracket" @click="deleteGroup">Delete</button>
+						<button class="danger" title="Supprimer cette accolade" @click="deleteGroup">Supprimer</button>
 					</div>
 				</div>
 				<div v-if="selected" class="note-editor">
 					<div class="note-title">
 						<strong>{{ describe(selected) }}</strong>
-						<button class="link" title="Deselect (Esc)" @click="selectedKey = null">✕</button>
+						<button class="link" title="Désélectionner (Échap)" @click="selectedKey = null">✕</button>
 					</div>
 					<p v-if="fitHint" class="hint">{{ fitHint }}</p>
 					<div v-if="isDynamic" class="rows">
-						<span class="label">Value</span>
-						<div class="group" aria-label="Value">
+						<span class="label">Nuance</span>
+						<div class="group" aria-label="Nuance">
 							<button
 								v-for="v in DYNAMIC_CHOICES"
 								:key="v"
@@ -1819,13 +1820,13 @@ async function downloadMidi() {
 						</div>
 						<span class="label">Note</span>
 						<div class="group" aria-label="Note">
-							<button title="At the previous note" :disabled="!canMove('at', -1)" @click="moveDynamic(-1)">◀</button>
-							<button title="At the next note" :disabled="!canMove('at', 1)" @click="moveDynamic(1)">▶</button>
+							<button title="Sur la note précédente" :disabled="!canMove('at', -1)" @click="moveDynamic(-1)">◀</button>
+							<button title="Sur la note suivante" :disabled="!canMove('at', 1)" @click="moveDynamic(1)">▶</button>
 						</div>
 					</div>
 					<div v-else-if="isSpan" class="rows">
-						<span class="label">Kind</span>
-						<div v-if="isHairpin" class="group" aria-label="Kind">
+						<span class="label">Type</span>
+						<div v-if="isHairpin" class="group" aria-label="Type">
 							<button
 								v-for="k in ['cres', 'dim']"
 								:key="k"
@@ -1836,40 +1837,40 @@ async function downloadMidi() {
 								{{ KIND_NAMES[k] }}
 							</button>
 						</div>
-						<div v-else class="group" aria-label="Kind">
+						<div v-else class="group" aria-label="Type">
 							<button
 								:aria-pressed="selected.kind === 'tie'"
 								:disabled="!canTie && selected.kind !== 'tie'"
 								:title="canTie ? 'A tie: one note held on' : 'A tie joins two notes of the same pitch'"
 								@click="editSpan({ kind: 'tie' })"
 							>
-								Tie
+								Prolongation
 							</button>
 							<button
 								:aria-pressed="selected.kind === 'slur'"
 								title="A slur or phrase mark: notes played smoothly"
 								@click="editSpan({ kind: 'slur' })"
 							>
-								Slur
+								Liaison
 							</button>
 						</div>
-						<span class="label">Start</span>
-						<div class="group" aria-label="Start">
-							<button title="Start on the previous note" :disabled="!canMove('from', -1)" @click="moveEnd('from', -1)">◀</button>
-							<button title="Start on the next note" :disabled="!canMove('from', 1)" @click="moveEnd('from', 1)">▶</button>
+						<span class="label">Début</span>
+						<div class="group" aria-label="Début">
+							<button title="Commencer sur la note précédente" :disabled="!canMove('from', -1)" @click="moveEnd('from', -1)">◀</button>
+							<button title="Commencer sur la note suivante" :disabled="!canMove('from', 1)" @click="moveEnd('from', 1)">▶</button>
 						</div>
-						<span class="label">End</span>
-						<div class="group" aria-label="End">
-							<button title="End on the previous note" :disabled="!canMove('to', -1)" @click="moveEnd('to', -1)">◀</button>
-							<button title="End on the next note" :disabled="!canMove('to', 1)" @click="moveEnd('to', 1)">▶</button>
+						<span class="label">Fin</span>
+						<div class="group" aria-label="Fin">
+							<button title="Finir sur la note précédente" :disabled="!canMove('to', -1)" @click="moveEnd('to', -1)">◀</button>
+							<button title="Finir sur la note suivante" :disabled="!canMove('to', 1)" @click="moveEnd('to', 1)">▶</button>
 						</div>
 					</div>
 					<div v-else class="rows">
 						<template v-if="isNote">
-							<span class="label">Pitch</span>
-							<div class="group" aria-label="Pitch">
-								<button title="Higher (↑)" @click="pitch(1)">▲</button>
-								<button title="Lower (↓)" @click="pitch(-1)">▼</button>
+							<span class="label">Hauteur</span>
+							<div class="group" aria-label="Hauteur">
+								<button title="Plus haut (↑)" @click="pitch(1)">▲</button>
+								<button title="Plus bas (↓)" @click="pitch(-1)">▼</button>
 								<span class="gap"></span>
 								<button
 									v-for="[a, text, title] in ALTER_CHOICES"
@@ -1882,24 +1883,24 @@ async function downloadMidi() {
 								</button>
 							</div>
 						</template>
-						<span class="label">Duration</span>
-						<div class="group" aria-label="Duration">
+						<span class="label">Durée</span>
+						<div class="group" aria-label="Durée">
 							<button
 								v-for="(v, i) in VALUES"
 								:key="v"
 								:aria-pressed="value(selected) === v"
-								:title="`${v} (${i + 1})`"
+								:title="`${VALUE_FR[v] ?? v} (${i + 1})`"
 								@click="setValue(v)"
 							>
-								{{ v === "eighth" ? "8th" : v }}
+								{{ VALUE_FR[v] ?? v }}
 							</button>
 							<span class="gap"></span>
-							<button :aria-pressed="selected.dots > 0" title="Dots: none, one, two (.)" @click="cycleDots">
-								{{ selected.dots === 2 ? "··" : "·" }} dot
+							<button :aria-pressed="selected.dots > 0" title="Points : aucun, un, deux (.)" @click="cycleDots">
+								{{ selected.dots === 2 ? "··" : "·" }} point
 							</button>
 						</div>
-						<span class="label">Tuplet</span>
-						<div class="group" aria-label="Tuplet">
+						<span class="label">N-olet</span>
+						<div class="group" aria-label="N-olet">
 							<button
 								v-for="[t, text, title] in TUP_CHOICES"
 								:key="t"
@@ -1912,8 +1913,8 @@ async function downloadMidi() {
 							</button>
 						</div>
 						<template v-if="isNote">
-							<span class="label">Marks</span>
-							<div class="group" aria-label="Marks">
+							<span class="label">Signes</span>
+							<div class="group" aria-label="Signes">
 								<button
 									v-for="[c, text, title] in ARTIC_CHOICES"
 									:key="c"
@@ -1926,8 +1927,8 @@ async function downloadMidi() {
 									{{ text }}
 								</button>
 							</div>
-							<span class="label">Dynamic</span>
-							<div class="group" aria-label="Dynamic">
+							<span class="label">Nuance</span>
+							<div class="group" aria-label="Nuance">
 								<button
 									v-for="v in DYNAMIC_CHOICES"
 									:key="v"
@@ -1944,21 +1945,21 @@ async function downloadMidi() {
 									:title="`Select this dynamic (to move it)`"
 									@click="selectedKey = noteDynamic.key"
 								>
-									Select {{ noteDynamic.value }}
+									Choisir {{ noteDynamic.value }}
 								</button>
 							</div>
-							<span class="label">Lines</span>
-							<div class="group" aria-label="Ties, slurs and hairpins">
+							<span class="label">Liaisons</span>
+							<div class="group" aria-label="Liaisons et soufflets">
 								<button
 									v-for="c in noteSpans"
 									:key="c.key"
-									:title="`Select this ${KIND_NAMES[c.kind].toLowerCase()}`"
+									:title="`Choisir : ${KIND_NAMES[c.kind].toLowerCase()}`"
 									@click="selectedKey = c.key"
 								>
 									{{ KIND_NAMES[c.kind] }} {{ c.from === selected.key ? "→" : "←" }} {{ pitchName(byKey.get(c.from === selected.key ? c.to : c.from)) }}
 								</button>
-								<button v-if="tieTarget" :title="`Tie to the next ${pitchName(tieTarget)}`" @click="addSpan('tie', selected, tieTarget)">
-									+ Tie
+								<button v-if="tieTarget" :title="`Lier au ${pitchName(tieTarget)} suivant`" @click="addSpan('tie', selected, tieTarget)">
+									+ Prolonger
 								</button>
 								<button
 									v-for="[kind, text, title] in PICKS"
@@ -1973,12 +1974,12 @@ async function downloadMidi() {
 						</template>
 					</div>
 					<div class="actions">
-						<button v-if="!isSpan && !isDynamic" title="Rest ↔ note (r)" @click="toggleRest">
-							{{ isNote ? "To rest" : "To note" }}
+						<button v-if="!isSpan && !isDynamic" title="Silence ↔ note (r)" @click="toggleRest">
+							{{ isNote ? "En silence" : "En note" }}
 						</button>
-						<button class="danger" title="Delete (Del)" @click="remove">Delete</button>
+						<button class="danger" title="Supprimer (Suppr)" @click="remove">Supprimer</button>
 					</div>
-					<p class="hint keys">{{ isSpan || isDynamic ? "Del delete · Esc deselect" : "← → previous / next · Esc deselect" }}</p>
+					<p class="hint keys">{{ isSpan || isDynamic ? "Suppr : supprimer · Échap : désélectionner" : "← → : précédente / suivante · Échap : désélectionner" }}</p>
 				</div>
 				<!-- not for a part, bracket or staff: no place on the page to show -->
 				<PageHighlight
@@ -1991,7 +1992,7 @@ async function downloadMidi() {
 				/>
 			</div>
 		</div>
-		<p v-else class="hint">No notes found — nothing to render.</p>
+		<p v-else class="hint">Aucune note trouvée : rien à afficher.</p>
 	</div>
 </template>
 

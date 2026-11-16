@@ -18,9 +18,11 @@ const props = defineProps({
 });
 const emit = defineEmits(["update:cls", "update:page", "add", "done"]);
 
+const VALUE_FR = { whole: "ronde", half: "blanche", quarter: "noire", eighth: "croche", "16th": "double croche", "32nd": "triple croche", "64th": "quadruple croche", breve: "carrée" };
 const label = (cls) => {
 	const [fam, value] = cls.split("_");
-	return `${value} ${fam}`;
+	const v = VALUE_FR[value] ?? value;
+	return fam === "rest" ? `Silence (${v})` : fam === "note" ? `Note : ${v}` : `${v} ${fam}`;
 };
 
 const zoom = ref(2);
@@ -61,7 +63,7 @@ const rectOf = ([x0, y0, x1, y1]) => ({
 	<div class="add-symbols">
 		<div class="row">
 			<label>
-				Add
+				Ajouter
 				<select
 					:value="cls"
 					@change="emit('update:cls', $event.target.value)"
@@ -72,7 +74,7 @@ const rectOf = ([x0, y0, x1, y1]) => ({
 				</select>
 			</label>
 			<label v-if="pageCount > 1">
-				On page
+				Sur la page
 				<select
 					:value="page"
 					@change="emit('update:page', Number($event.target.value))"
@@ -90,13 +92,12 @@ const rectOf = ([x0, y0, x1, y1]) => ({
 					</option>
 				</select>
 			</label>
-			<button class="secondary" @click="emit('done')">Done adding</button>
+			<button class="secondary" @click="emit('done')">Fin de l’ajout</button>
 		</div>
 		<p class="hint">
-			Click where a missed note's head is (for a rest, its middle). Outlined:
-			what was read. The note's value, pitch and accidental can be changed
-			afterwards.
-			<span v-if="missed" class="error">That is too far from a staff.</span>
+			Cliquez à l’endroit de la tête de la note oubliée (pour un silence, son milieu).
+			En contour : ce qui a été lu. La durée, la hauteur et l’altération se changent ensuite.
+			<span v-if="missed" class="error">C’est trop loin d’une portée.</span>
 		</p>
 		<div class="add-view">
 			<svg
@@ -104,7 +105,7 @@ const rectOf = ([x0, y0, x1, y1]) => ({
 				:viewBox="`0 0 ${width} ${height}`"
 				:style="{ width: `${zoom * 100}%` }"
 				role="img"
-				aria-label="The page: click to add the chosen symbol"
+				aria-label="La page : cliquez pour ajouter le symbole choisi"
 				@pointermove="onMove"
 				@pointerleave="pointer = null"
 				@click="onClick"
