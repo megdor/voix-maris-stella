@@ -8,10 +8,7 @@ export const engines = import.meta.env?.VITE_APP
 			{ id: "2m", name: "Fast — copista-2m" },
 			{ id: "28m", name: "High accuracy — copista-28m (115 MB download)" },
 		]
-	: [
-			{ id: "2m", name: "Fast — copista-2m (≈16 MB download)" },
-			{ id: "28m", name: "High accuracy — copista-28m (≈124 MB download)" },
-		];
+	: [{ id: "2m", name: "copista-2m (≈16 Mo, une seule fois)" }];
 
 /** Whether this is the Android / iOS app (where some models are downloaded). */
 export const isApp = Boolean(import.meta.env?.VITE_APP);
