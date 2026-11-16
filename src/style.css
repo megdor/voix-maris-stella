@@ -346,3 +346,8 @@ video {
 	flex-basis: 100%;
 	margin: 0;
 }
+
+/* liens lisibles en thème clair comme sombre */
+a {
+	color: var(--accent);
+}

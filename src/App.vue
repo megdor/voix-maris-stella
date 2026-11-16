@@ -17,10 +17,10 @@ provide("omr", omr);
 	<ScoreLibrary v-if="isApp && omr.screen === 'menu'" />
 	<template v-else-if="isApp">
 		<header class="app-bar">
-			<button class="back" title="My scores" @click="omr.closeScore">
+			<button class="back" title="Mes partitions" @click="omr.closeScore">
 				<span aria-hidden="true">←</span> My scores
 			</button>
-			<span v-if="!omr.docId" class="hint">Saved once recognized</span>
+			<span v-if="!omr.docId" class="hint">Enregistrée une fois lue</span>
 		</header>
 		<div class="app">
 			<StepTabs />

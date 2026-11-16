@@ -127,7 +127,7 @@ export function useOmr() {
 			models.value[id] = "ready";
 		} catch (e) {
 			console.error(e);
-			error.value = `Download failed: ${e.message}`;
+			error.value = `Échec du téléchargement : ${e.message}`;
 			models.value[id] = "missing";
 		} finally {
 			modelProgress.value = null;
