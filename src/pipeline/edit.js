@@ -583,6 +583,7 @@ export function resultOf(reading, edited = new Set(), page = 0) {
 			dynamics: symbols.filter((s) => s.family === "dynamic").length,
 			changed: symbols.filter((s) => s.changed).length,
 			edited: edited.size,
+			merge: L.systems.diag ?? null,
 		},
 	};
 }
