@@ -285,12 +285,28 @@ function parseScore(xmlText){
   // notes brutes par mesure
   const raw=[]; // {m, t (noires dans la mesure), d, midi, key, tieStart, tieStop}
   const trackDefs=new Map();
+  const octFixed=[]; // notes dont l'octave a été corrigée (clé de sol / sol 8 mal lue)
   const clefs={}; // "pid|portée" -> "G" (clé de sol), "G8" (sol 8 en bas), "F" (fa)…
   parts.forEach((part,pi)=>{
     const pid=part.getAttribute("id"); const pname=partNames[pid]||("Partie "+(pi+1));
     // accompagnement : nom explicite, ou grande portée (2 portées et plus) sans nom de voix
     const accomp=accompSet.has(pi);
     let div=1, beats=4, beatType=4, transpose=0;
+    // Clé de sol et clé de sol 8 qui alternent sur une même portée de voix : la lecture a manqué (ou inventé)
+    // le petit 8 sur quelques systèmes. La clé majoritaire est la vraie ; ailleurs l'octave est corrigée.
+    const octFix={}; const curClef={};
+    if(!accomp){
+      const cnt={}; const cc={};
+      kids(part,"measure").forEach(m=>{ for(const el of m.children){
+        if(el.tagName==="attributes") el.querySelectorAll("clef").forEach(c=>{ cc[c.getAttribute("number")||"1"]=(txt(c,"sign")||"")+((+(txt(c,"clef-octave-change")||0))<0?"8":""); });
+        else if(el.tagName==="note" && el.querySelector("pitch")){ const st=txt(el,"staff")||"1"; const k=st+"|"+(cc[st]||"");
+          cnt[k]=(cnt[k]||0)+1; } } });
+      new Set(Object.keys(cnt).map(k=>k.split("|")[0])).forEach(st=>{
+        const g=cnt[st+"|G"]||0, g8=cnt[st+"|G8"]||0;
+        if(g && g8){ const maj=g8>=g?"G8":"G"; octFix[st]={from:maj==="G8"?"G":"G8", shift:maj==="G8"?-12:12};
+          clefs[pid+"|"+st]=maj; }
+      });
+    }
     kids(part,"measure").forEach((m,mi)=>{
       const info=measInfo[mi];
       if(pi===0){ info.num=m.getAttribute("number"); }
@@ -301,6 +317,7 @@ function parseScore(xmlText){
           const d=txt(el,"divisions"); if(d) div=+d;
           const b=txt(el,"time > beats"), bt=txt(el,"time > beat-type"); if(b){beats=+b.split("+").reduce((a,x)=>a+ +x,0)||4; beatType=+bt||4;}
           const tr=txt(el,"transpose > chromatic"), oc=txt(el,"transpose > octave-change"); if(tr!==null) transpose=(+tr)+12*(+oc||0);
+          el.querySelectorAll("clef").forEach(c=>{ curClef[c.getAttribute("number")||"1"]=(txt(c,"sign")||"")+((+(txt(c,"clef-octave-change")||0))<0?"8":""); });
           el.querySelectorAll("clef").forEach(c=>{ const k=pid+"|"+(c.getAttribute("number")||"1"); if(clefs[k]) return;
             const sg=txt(c,"sign")||""; clefs[k]=sg+((+(txt(c,"clef-octave-change")||0))<0?"8":""); });
         } else if(tag==="backup"){ t-=(+txt(el,"duration")||0)/div; }
@@ -348,9 +365,10 @@ function parseScore(xmlText){
           if(m.getAttribute("implicit")==="yes") info.implicit=true;
           if(el.querySelector("rest")||isCue) continue;
           const step=txt(el,"pitch > step"); if(!step) continue;
-          const midi=12*((+txt(el,"pitch > octave"))+1)+STEP[step]+Math.round(+(txt(el,"pitch > alter")||0))+transpose;
+          let midi=12*((+txt(el,"pitch > octave"))+1)+STEP[step]+Math.round(+(txt(el,"pitch > alter")||0))+transpose;
           const voice=accomp?"acc":(txt(el,"voice")||"1");
           const staff=txt(el,"staff")||"1";
+          const fx=octFix[staff]; if(fx && curClef[staff]===fx.from){ midi+=fx.shift; octFixed.push({m:mi,key:pid+"|"+voice}); }
           const key=pid+"|"+voice;
           if(!trackDefs.has(key)) trackDefs.set(key,{key,pid,pname,voice,staff,accomp,order:pi*100+(+voice||0),count:0,lo:127,hi:0,sum:0});
           const td=trackDefs.get(key); td.count++; td.lo=Math.min(td.lo,midi); td.hi=Math.max(td.hi,midi); td.sum+=midi;
@@ -414,6 +432,10 @@ function parseScore(xmlText){
   splitChordTracks(tracks, events);
   nameTracks(tracks, events);
   const suspects=checkScore(measInfo, tracks, events, timeline, partNames);
+  { const seen=new Set(); octFixed.forEach(({m,key})=>{ const k=m+"|"+key; if(seen.has(k)) return; seen.add(k);
+      const t=tracks.find(t=>t.key===(alias[key]||key))||tracks.find(t=>t.key.startsWith(key.split("|")[0]+"|"));
+      const l=suspects.get(m)||suspects.set(m,[]).get(m);
+      l.push({who:t?t.name.replace(/ — voix \d+$/,""):"Voix", why:"clé lue sans (ou avec) le petit 8 : octave corrigée automatiquement, à vérifier", acc:false}); }); }
   // systèmes à la mise en page différente (portée en plus ou en moins) : voix probablement mélangées
   { const sp=sparseMulti(parts); parts.forEach((p,i)=>{ if(!sp[i]) return;
       barsWithNotes(p).forEach(mi=>{ const l=suspects.get(mi)||suspects.set(mi,[]).get(mi);
@@ -530,7 +552,13 @@ function nameTracks(tracks, events){
   const clefsKnown=W.length+M.length===ord.length && W.length>0 && M.length>0 &&
     ord.every((o,j)=>j===0||!(sex(ord[j-1])==="m"&&sex(o)==="f"));   // femmes au-dessus, hommes en dessous
   let names;
-  if(clefsKnown){
+  const allKnown=W.length+M.length===ord.length;
+  const steps=L=>L.every((o,j)=>j===0||L[j-1].m-o.m>=1.5) && new Set(L.map(o=>o.t.staffKey)).size>=2;
+  const MEN={1:["Hommes"],2:["Ténor","Basse"],3:["Ténor","Baryton","Basse"],4:["Ténor 1","Ténor 2","Baryton","Basse"]};
+  const WOMEN={1:["Femmes"],2:["Soprano","Alto"],3:["Soprano 1","Soprano 2","Alto"],4:["Soprano 1","Soprano 2","Alto 1","Alto 2"]};
+  if(allKnown && !W.length && M.length>=2 && MEN[M.length] && steps(M)) names=MEN[M.length];        // chœur d'hommes (TTBB…)
+  else if(allKnown && !M.length && W.length>=2 && WOMEN[W.length] && steps(W)) names=WOMEN[W.length]; // chœur de femmes (SSAA…)
+  else if(clefsKnown){
     const step=(L,j,min)=>L[j-1].m-L[j].m>=min;
     const staves=L=>new Set(L.map(o=>o.t.staffKey)).size;
     const wN = W.length===2 && step(W,1,2.5) ? ["Soprano","Alto"]
