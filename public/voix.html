@@ -540,7 +540,7 @@ function parseScore(xmlText){
   // lecture manifestement ratée : une page de plus de 40 mesures (systèmes d'un conducteur d'orchestre
   // découpés en morceaux mis bout à bout) ou plus de 18 parties
   let layoutWarn=null;
-  { const st=pageStarts(parts); st.push(kids(parts[0],"measure").length);
+  { const ms=kids(parts[0],"measure"); const st=pageStarts(parts); st.push(ms.length);
     const per=st.slice(1).map((v,k)=>v-st[k]); const worst=Math.max(0,...per);
     if(worst>40) layoutWarn=`la page ${per.indexOf(worst)+1} donne ${worst} mesures, ce qui est impossible`;
     else if(parts.length>18) layoutWarn=`${parts.length} portées différentes ont été trouvées`;
