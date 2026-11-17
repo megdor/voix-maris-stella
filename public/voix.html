@@ -686,6 +686,9 @@ function checkScore(measInfo, tracks, events, timeline, partNames){
     const ev=events.filter(e=>e.tr===ti);
     const seq=[]; ev.forEach(e=>{ const p=seq[seq.length-1]; if(p && Math.abs(p.q-e.q)<1e-6){ if(e.midi>p.midi) seq[seq.length-1]=e; } else seq.push(e); });
     // note isolée : aller-retour de 10 demi-tons ou plus — sauf saut d'octave exacte, courant à la basse
+    // un même grand saut (mêmes deux notes) dans trois mesures différentes ou plus : écrit ainsi, pas une erreur
+    const jumpAt=new Map(); for(let i=1;i<seq.length;i++){ const k=seq[i-1].midi+">"+seq[i].midi;
+      (jumpAt.get(k)||jumpAt.set(k,new Set()).get(k)).add(timeline[seq[i].seg].m); }
     let skip=-1;
     for(let i=1;i<seq.length;i++){
       const a=seq[i-1].midi, b=seq[i].midi, mi=timeline[seq[i].seg].m;
@@ -693,7 +696,7 @@ function checkScore(measInfo, tracks, events, timeline, partNames){
       const octaveAR = Math.abs(b-a)===12 || Math.abs(b-c)===12;   // un saut d'octave exacte est un geste musical normal
       if(c!==null && !octaveAR && Math.abs(b-a)>=10 && Math.abs(b-c)>=10 && Math.sign(b-a)===Math.sign(b-c)){
         add(mi, t.name, "note isolée très éloignée de ses voisines"); skip=i+1; continue; }   // le retour n'est pas une 2e erreur
-      if(i!==skip && Math.abs(b-a)>12) add(mi, t.name, `saut de ${Math.abs(b-a)} demi-tons`);
+      if(i!==skip && Math.abs(b-a)>12 && jumpAt.get(a+">"+b).size<3) add(mi, t.name, `saut de ${Math.abs(b-a)} demi-tons`);
     }
     // registre inhabituel : toute une mesure loin de la tessiture habituelle de la voix (clé mal lue, octave fausse)
     const sorted=seq.map(e=>e.midi).sort((x,y)=>x-y); if(sorted.length<8) return;
