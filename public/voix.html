@@ -494,9 +494,12 @@ function parseScore(xmlText){
   // le nombre de portées chantées change d'une page à l'autre (soliste qui entre, chœur réduit…) : la
   // lecture associe les portées aux voix d'après leur clé et leur registre, ce qui peut se tromper
   // entre voix semblables (soliste / 1re voix) : première mesure de la page signalée
+  // débuts de page : un saut de page lu dans n'importe quelle partie (une voix qui n'entre
+  // qu'à la page 10 n'a pas de sauts de page avant, dans les partitions déjà enregistrées)
+  function pageStarts(ps){ const set=new Set([0]); ps.forEach(p=>kids(p,"measure").forEach((m,i)=>{ if(m.querySelector("print[new-page='yes']")) set.add(i); })); return [...set].sort((a,b)=>a-b); }
   let swaps=0, pageBreaks=0;
   { const acc=accompParts(parts, partNames);
-    const starts=[0]; kids(parts[0],"measure").forEach((m,i)=>{ if(i>0 && m.querySelector("print[new-page='yes']")) starts.push(i); });
+    const starts=pageStarts(parts);
     pageBreaks=starts.length-1;
     // une voix qui s'arrête à un saut de page pendant qu'une voix semblable (même clé, même registre)
     // commence : c'est sans doute la même voix, passée d'une piste à l'autre
@@ -537,7 +540,7 @@ function parseScore(xmlText){
   // lecture manifestement ratée : une page de plus de 40 mesures (systèmes d'un conducteur d'orchestre
   // découpés en morceaux mis bout à bout) ou plus de 18 parties
   let layoutWarn=null;
-  { const ms=kids(parts[0],"measure"); const st=[]; ms.forEach((m,i)=>{ if(i===0||m.querySelector("print[new-page='yes']")) st.push(i); }); st.push(ms.length);
+  { const st=pageStarts(parts); st.push(kids(parts[0],"measure").length);
     const per=st.slice(1).map((v,k)=>v-st[k]); const worst=Math.max(0,...per);
     if(worst>40) layoutWarn=`la page ${per.indexOf(worst)+1} donne ${worst} mesures, ce qui est impossible`;
     else if(parts.length>18) layoutWarn=`${parts.length} portées différentes ont été trouvées`;
