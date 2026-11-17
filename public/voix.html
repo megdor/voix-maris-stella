@@ -462,6 +462,8 @@ function parseScore(xmlText){
   events.sort((a,b)=>a.q-b.q||a.tr-b.tr);
   splitChordTracks(tracks, events);
   nameTracks(tracks, events);
+  { const hi=new Set(parts.filter(p=>!VOCAL.test(partNames[p.getAttribute("id")]||"") && highInstrument(p)).map(p=>p.getAttribute("id")));
+    tracks.forEach(t=>{ if(hi.has(t.pid) && /^(Accompagnement|part|partie|p\s*\d*)/i.test(t.name)) t.name="Instrument aigu (violon, flûte…)"; }); }
   const suspects=checkScore(measInfo, tracks, events, timeline, partNames);
   { const seen=new Set(); octFixed.forEach(({m,key})=>{ const k=m+"|"+key; if(seen.has(k)) return; seen.add(k);
       const t=tracks.find(t=>t.key===(alias[key]||key))||tracks.find(t=>t.key.startsWith(key.split("|")[0]+"|"));
@@ -524,6 +526,15 @@ function sparseMulti(parts){
   const counts=parts.map(p=>barsWithNotes(p).length); const ref=Math.max(1,...counts);
   return parts.map((p,i)=> +(txt(p,"attributes > staves")||1)>=2 && counts[i]<0.5*ref );
 }
+// Instrument aigu sur une portée (violon, flûte…) : une voix chantée ne reste pas si haut ; médiane
+// au-dessus du sol 5 et 10 % des notes au-dessus du ré 6 (une soprano ou un descant restent en dessous)
+function highInstrument(part){
+  if(+(txt(part,"attributes > staves")||1)!==1) return false;
+  const STEPN={C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+  const ps=[...part.querySelectorAll("note pitch")].map(q=>12*((+txt(q,"octave"))+1)+STEPN[txt(q,"step")]).filter(x=>!isNaN(x)).sort((a,b)=>a-b);
+  if(ps.length<30) return false;
+  return ps[ps.length>>1]>=79 && ps[Math.floor(ps.length*0.9)]>=86;
+}
 function accompParts(parts, partNames){
   const set=new Set();
   const name=i=>partNames[parts[i].getAttribute("id")]||"";
@@ -539,7 +550,7 @@ function accompParts(parts, partNames){
   // Le contenu trahit le piano même quand la mise en page ne le montre pas (accolade non lue : ses deux
   // portées arrivent comme deux parties d'une portée) : accords de 4 sons et plus, accords de 3 sons sur une
   // octave, longues suites d'octaves (main gauche) — ce qu'une portée de chœur n'écrit pas, même à 3 voix.
-  parts.forEach((p,i)=>{ if(set.has(i) || isVocal(i)) return; if(pianoLike(p)) set.add(i); });
+  parts.forEach((p,i)=>{ if(set.has(i) || isVocal(i)) return; if(pianoLike(p) || highInstrument(p)) set.add(i); });
   return set;
 }
 function pianoLike(part){
