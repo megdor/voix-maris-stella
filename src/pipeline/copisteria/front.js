@@ -717,58 +717,83 @@ function sameBars(syms, staves, A, B, diag = []) {
 }
 
 function sameCuts(syms, staves, A, B, mask, forced, diag) {
-	// same layout twice (S+A, then S+A again): two systems unless the bars
-	// agree on many places; different layouts (the choir, then the piano;
-	// one group of voices, then the next): one system when the bars agree
-	const same = A.length === B.length;
-	if (same ? A.length < 3 : A.length + B.length < 4) {
-		return false;
-	}
 	const a = segmentCuts(syms, staves, { staves: A }, mask, forced);
 	const b = segmentCuts(syms, staves, { staves: B }, mask, forced);
 	const ia = a.xs.slice(1, -1);
 	const ib = b.xs.slice(1, -1);
 	const sp = (a.sp + b.sp) / 2;
-	const between = (staves[B[0]].y0 - staves[A[A.length - 1]].y1) / sp;
-	diag.push({
-		a: ia.map(Math.round),
-		b: ib.map(Math.round),
-		n: [A.length, B.length],
-		sp: Math.round(sp),
-		gap: Math.round(between),
-	});
-	if (ia.length !== ib.length || ia.length < (same ? 3 : 2)) {
+	diag.push({ a: ia.map(Math.round), b: ib.map(Math.round), n: [A.length, B.length] });
+	if (ia.length !== ib.length || ia.length < 2) {
 		return false;
 	}
-	const tol = same || ia.length >= 3 ? 1 : 0.75;
-	if (!ia.every((x, j) => Math.abs(x - ib[j]) <= tol * sp)) {
-		return false;
-	}
-	const gaps = [];
-	for (const ks of [A, B]) {
-		for (let j = 1; j < ks.length; j++) {
-			gaps.push((staves[ks[j]].y0 - staves[ks[j - 1]].y1) / sp);
-		}
-	}
-	gaps.sort((x, y) => x - y);
-	const g = gaps.length ? gaps[gaps.length >> 1] : 2;
-	return between <= 2.5 * Math.max(g, 2);
+	const tol = ia.length >= 3 ? 1 : 0.75;
+	return ia.every((x, j) => Math.abs(x - ib[j]) <= tol * sp);
 }
 
-function mergeAligned(syms, staves, systems, ink = false, mask = null, forced = null) {
-	const diag = [];
-	for (let n = 1; n < systems.length; ) {
-		const A = systems[n - 1].staves;
-		const B = systems[n].staves;
+// Engravers align the bars of successive systems, so aligned bars alone do
+// not make one system. Among the ways of joining neighbours whose bars
+// agree, keep the page made of whole systems: as many as possible of the
+// largest size, few different sizes, then the fewest joins (S+A, S+A stay
+// two systems; 3 voices | piano | 1 voice | 3 voices + piano become 5 | 5;
+// S+A+T | B become one).
+function bestGrouping(sizes, joinable) {
+	const n = sizes.length;
+	let best = null;
+	for (let mask = 0; mask < 1 << (n - 1); mask++) {
+		let ok = true;
+		const groups = [sizes[0]];
+		for (let j = 1; j < n; j++) {
+			if (mask & (1 << (j - 1))) {
+				if (!joinable[j - 1]) {
+					ok = false;
+					break;
+				}
+				groups[groups.length - 1] += sizes[j];
+			} else {
+				groups.push(sizes[j]);
+			}
+		}
+		if (!ok) {
+			continue;
+		}
+		const top = Math.max(...groups);
+		const score =
+			2 * groups.filter((g) => g === top).length - new Set(groups).size;
 		if (
-			ink
-				? sameCuts(syms, staves, A, B, mask, forced, diag)
-				: sameBars(syms, staves, A, B, diag)
+			!best ||
+			score > best.score ||
+			(score === best.score && groups.length < best.groups)
 		) {
-			systems[n - 1].staves.push(...systems[n].staves);
-			systems.splice(n, 1);
-		} else {
-			n++;
+			best = { mask, score, groups: groups.length };
+		}
+	}
+	return best ? best.mask : 0;
+}
+
+function mergeAligned(syms, staves, systems, useCuts = false, mask = null, forced = null) {
+	const diag = [];
+	const n = systems.length;
+	if (n < 2 || n > 12) {
+		return diag;
+	}
+	const joinable = [];
+	for (let j = 1; j < n; j++) {
+		const A = systems[j - 1].staves;
+		const B = systems[j].staves;
+		joinable.push(
+			useCuts
+				? sameCuts(syms, staves, A, B, mask, forced, diag)
+				: sameBars(syms, staves, A, B, diag),
+		);
+	}
+	const m = bestGrouping(
+		systems.map((sy) => sy.staves.length),
+		joinable,
+	);
+	for (let j = n - 1; j >= 1; j--) {
+		if (m & (1 << (j - 1))) {
+			systems[j - 1].staves.push(...systems[j].staves);
+			systems.splice(j, 1);
 		}
 	}
 	return diag;
