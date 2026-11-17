@@ -463,7 +463,7 @@ function parseScore(xmlText){
   splitChordTracks(tracks, events);
   nameTracks(tracks, events);
   { const hi=new Set(parts.filter(p=>!VOCAL.test(partNames[p.getAttribute("id")]||"") && highInstrument(p)).map(p=>p.getAttribute("id")));
-    tracks.forEach(t=>{ if(hi.has(t.pid) && /^(Accompagnement|part|partie|p\s*\d*)/i.test(t.name)) t.name="Instrument aigu (violon, flûte…)"; }); }
+    tracks.forEach(t=>{ if(hi.has(t.key.split("|")[0]) && /^(Accompagnement|part|partie|p\s*\d*)/i.test(t.name)) t.name="Instrument aigu (violon, flûte…)"; }); }
   const suspects=checkScore(measInfo, tracks, events, timeline, partNames);
   { const seen=new Set(); octFixed.forEach(({m,key})=>{ const k=m+"|"+key; if(seen.has(k)) return; seen.add(k);
       const t=tracks.find(t=>t.key===(alias[key]||key))||tracks.find(t=>t.key.startsWith(key.split("|")[0]+"|"));
