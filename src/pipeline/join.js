@@ -390,6 +390,38 @@ function mergeFragments(root, plist, parts) {
  * The pages' trees joined into one score-partwise tree (the inputs are left
  * as they are). One page: a copy of it.
  */
+// A bar where nothing at all was read, in any part (no note, no rest): a
+// column the page reading added at a system's end (La Carità, a bar of
+// nothing after each system), not music. Dropped, its settings and page
+// break carried to the next bar.
+function dropEmptyBars(parts) {
+	const lists = parts.map((p) => childrenOf(p, "measure"));
+	const n = Math.min(...lists.map((l) => l.length));
+	if (!parts.length || n < 2) {
+		return;
+	}
+	for (let i = n - 1; i >= 0; i--) {
+		if (lists.some((l) => l[i].children.some((c) => c.tag === "note"))) {
+			continue;
+		}
+		parts.forEach((part, k) => {
+			const m = lists[k][i];
+			const keep = m.children.filter(
+				(c) => c.tag === "attributes" || c.tag === "print" || c.tag === "direction",
+			);
+			const next = lists[k][i + 1] ?? null;
+			if (next) {
+				next.children.unshift(...keep);
+			}
+			part.children.splice(part.children.indexOf(m), 1);
+			lists[k].splice(i, 1);
+		});
+	}
+	for (const l of lists) {
+		l.forEach((m, j) => m.set("number", j + 1));
+	}
+}
+
 export function joinTrees(trees) {
 	if (trees.length === 0) {
 		return new El("score-partwise", { version: "4.0" });
@@ -508,6 +540,7 @@ export function joinTrees(trees) {
 		measures += count;
 	}
 	mergeFragments(root, plist, parts);
+	dropEmptyBars(parts);
 	// ids and default names in score order again (P1, P2, …)
 	const rename = new Map();
 	parts.forEach((part, n) => rename.set(attr(part, "id"), `P${n + 1}`));
