@@ -1575,6 +1575,12 @@ async function downloadMidi() {
 					(Échap : annuler).
 				</span>
 				<span v-else-if="pickHint" class="error">{{ pickHint }}</span>
+				<span v-else-if="result.summary.notes < 4" class="error">
+					Aucune note n’a été reconnue sur cette partition. L’outil lit la notation moderne
+					(portées de 5 lignes, imprimée) : le chant grégorien en neumes carrés (portée de 4 lignes),
+					les partitions manuscrites, les grilles d’accords et les pages de texte ne sont pas lus.
+					Vérifiez aussi que la page n’est pas à l’envers, trop sombre ou floue.
+				</span>
 				<span v-else class="hint">
 					Première lecture : « 🎵 Travailler les voix » pour écouter. Pour corriger, cliquez
 					une note, une liaison, une nuance, une clé, une armure ou une mesure.
