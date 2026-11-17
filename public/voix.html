@@ -672,16 +672,21 @@ function nameTracks(tracks, events){
   const mean=i=>{ const ev=events.filter(e=>e.tr===i); return ev.reduce((s,e)=>s+e.midi,0)/(ev.length||1); };
   // ordre de la partition (de haut en bas) ; noms SATB seulement si cet ordre va bien de l'aigu au grave,
   // sinon (soliste, voix croisées…) noms neutres dans l'ordre de la partition — modifiables par le choriste
-  const ord=voc.map(o=>({...o,m:mean(o.i)}));
+  let ord=voc.map(o=>({...o,m:mean(o.i)}));
   // SATB seulement si les voix sont nettement étagées (écart moyen ≥ 2,5 demi-tons entre voisines,
   // ≥ 1,5 entre Soprano 1 et 2) : sinon (soliste au-dessus des sopranos, voix croisées…) on ne devine pas
   const gap=(j,min)=>ord[j-1].m-ord[j].m>=min;
-  const satb = ord.length===4 && gap(1,2.5)&&gap(2,2.5)&&gap(3,2.5);
-  const ssatb= ord.length===5 && gap(1,1.5)&&gap(2,2.5)&&gap(3,2.5)&&gap(4,2.5);
+  const satbOK=()=>ord.length===4 && gap(1,2.5)&&gap(2,2.5)&&gap(3,2.5);
+  const ssatbOK=()=>ord.length===5 && gap(1,1.5)&&gap(2,2.5)&&gap(3,2.5)&&gap(4,2.5);
   const neutral=list=>list.map((_,j)=>"Voix "+(j+1)+(list.length>1&&j===0?" (en haut)":list.length>1&&j===list.length-1?" (en bas)":""));
   // La clé dit d'abord qui chante : clé de sol = voix de femmes, clé de fa ou sol 8 = voix d'hommes.
   // (Une partition « Soliste, Soprano, Alto, Hommes » ne doit pas devenir « Soprano, Alto, Ténor, Basse ».)
   const sex=o=>o.t.clef==="G"?"f":(o.t.clef==="F"||o.t.clef==="G8")?"m":null;
+  // une voix d'homme seule sur sa portée, tout en haut, au-dessus des voix de femmes (Ama Namin :
+  // « baritone solo » puis S, A, T, B) : c'est le soliste, le chœur est nommé sans lui
+  let soloTop=null;
+  if(ord.length>=4 && sex(ord[0])==="m" && ord.slice(1).some(o=>sex(o)==="f") && ord.slice(1).every(o=>o.t.staffKey.split("|")[0]!==ord[0].t.staffKey.split("|")[0])){
+    soloTop=ord[0]; ord=ord.slice(1); }
   const W=ord.filter(o=>sex(o)==="f"), M=ord.filter(o=>sex(o)==="m");
   const clefsKnown=W.length+M.length===ord.length && W.length>0 && M.length>0 &&
     ord.every((o,j)=>j===0||!(sex(ord[j-1])==="m"&&sex(o)==="f"));   // femmes au-dessus, hommes en dessous
@@ -690,17 +695,21 @@ function nameTracks(tracks, events){
   const steps=L=>L.every((o,j)=>j===0||L[j-1].m-o.m>=1.5) && new Set(L.map(o=>o.t.staffKey)).size>=2;
   const MEN={1:["Hommes"],2:["Ténor","Basse"],3:["Ténor","Baryton","Basse"],4:["Ténor 1","Ténor 2","Baryton","Basse"]};
   const WOMEN={1:["Femmes"],2:["Soprano","Alto"],3:["Soprano 1","Soprano 2","Alto"],4:["Soprano 1","Soprano 2","Alto 1","Alto 2"]};
-  if(allKnown && !W.length && M.length>=2 && MEN[M.length] && steps(M)) names=MEN[M.length];        // chœur d'hommes (TTBB…)
+  // voix rangées par portée (dans l'ordre des portées) : « Soprano 1, Soprano 2 » puis « Alto 1, Alto 2 »
+  const byStaff=(L,hi,lo)=>{ const keys=[...new Set(L.map(o=>o.t.staffKey))];
+    const rank=k=>{ const m=L.filter(o=>o.t.staffKey===k).map(o=>o.m); return -m.reduce((a,b)=>a+b,0)/m.length; };
+    keys.sort((a,b)=>rank(a)-rank(b));
+    return L.map(o=>{ const top=o.t.staffKey===keys[0]; const grp=L.filter(x=>x.t.staffKey===o.t.staffKey);
+      return (top?hi:lo)+(grp.length>1?" "+(grp.indexOf(o)+1):""); }); };
+  const nStaves=L=>new Set(L.map(o=>o.t.staffKey)).size;
+  // hommes seuls sur deux portées, l'une partagée (Ténor | Basse divisée) : « Ténor, Basse 1, Basse 2 »
+  if(allKnown && !W.length && M.length>=3 && nStaves(M)===2 && steps(M)) names=byStaff(M,"Ténor","Basse");
+  else if(allKnown && !M.length && W.length>=3 && nStaves(W)===2 && steps(W)) names=byStaff(W,"Soprano","Alto");
+  else if(allKnown && !W.length && M.length>=2 && MEN[M.length] && steps(M)) names=MEN[M.length];        // chœur d'hommes (TTBB…)
   else if(allKnown && !M.length && W.length>=2 && WOMEN[W.length] && steps(W)) names=WOMEN[W.length]; // chœur de femmes (SSAA…)
   else if(clefsKnown){
     const step=(L,j,min)=>L[j-1].m-L[j].m>=min;
-    const staves=L=>new Set(L.map(o=>o.t.staffKey)).size;
-    // voix rangées par portée (dans l'ordre des portées) : « Soprano 1, Soprano 2 » puis « Alto 1, Alto 2 »
-    const byStaff=(L,hi,lo)=>{ const keys=[...new Set(L.map(o=>o.t.staffKey))];
-      const rank=k=>{ const m=L.filter(o=>o.t.staffKey===k).map(o=>o.m); return -m.reduce((a,b)=>a+b,0)/m.length; };
-      keys.sort((a,b)=>rank(a)-rank(b));
-      return L.map(o=>{ const top=o.t.staffKey===keys[0]; const grp=L.filter(x=>x.t.staffKey===o.t.staffKey);
-        return (top?hi:lo)+(grp.length>1?" "+(grp.indexOf(o)+1):""); }); };
+    const staves=nStaves;
     const wN = W.length===2 && step(W,1,2.5) ? ["Soprano","Alto"]
              : W.length===3 && staves(W)===3 && M.length>=2 && step(W,1,1.5)&&step(W,2,2.5) ? ["Soprano 1","Soprano 2","Alto"]
              : W.length===3 && W[1].t.staffKey===W[2].t.staffKey && W[0].t.staffKey!==W[1].t.staffKey && M.length>=1
@@ -722,11 +731,12 @@ function nameTracks(tracks, events){
              : neutral(M).map(n=>n.replace(/^Voix/,"Voix d'hommes"));
     names=[...wN,...mN];
   } else {
-    names = satb ? ["Soprano","Alto","Ténor","Basse"]
-          : ssatb ? ["Soprano 1","Soprano 2","Alto","Ténor","Basse"]
+    names = satbOK() ? ["Soprano","Alto","Ténor","Basse"]
+          : ssatbOK() ? ["Soprano 1","Soprano 2","Alto","Ténor","Basse"]
           : neutral(ord);
   }
   ord.forEach((o,j)=>{ o.t.name=names[j]; });
+  if(soloTop) soloTop.t.name="Soliste";
   if(ord.length===1) ord[0].t.name="Chant";   // une seule voix chantée (air, mélodie accompagnée)
   tracks.forEach(t=>{ if(t.accomp && /^(part|partie|p)\s*\d*$/i.test(t.name.trim())) t.name="Accompagnement"; });
 }
