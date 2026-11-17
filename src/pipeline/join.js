@@ -449,8 +449,20 @@ export function joinTrees(trees) {
 	// what each score part looks like (from the last page where it was met)
 	const sigs = parts.map(signature);
 	let nextId = parts.length;
+	let setAside = 0;
 	for (const tree of trees.slice(1)) {
 		const pageParts = partsOf(tree);
+		// a page of one staff only, many bars long, after pages of a choir: an
+		// instrument's separate part printed at the end (Forrest, Psalm 8: the
+		// violin), not the score going on; left aside, and said so
+		if (
+			parts.length >= 3 &&
+			pageParts.length === 1 &&
+			childrenOf(pageParts[0], "measure").length > 24
+		) {
+			setAside++;
+			continue;
+		}
 		const pageSigs = pageParts.map(signature);
 		const plan = matchParts(sigs, pageSigs);
 		// score parts that are the two staves of one part (seen whole on this page):
@@ -545,6 +557,18 @@ export function joinTrees(trees) {
 	}
 	mergeFragments(root, plist, parts);
 	dropEmptyBars(parts);
+	if (setAside) {
+		let ident = childrenOf(root, "identification")[0];
+		if (!ident) {
+			ident = new El("identification");
+			root.children.splice(root.children.indexOf(plist), 0, ident);
+		}
+		const misc = new El("miscellaneous");
+		const field = new El("miscellaneous-field", { name: "pages-a-part" });
+		field.text = String(setAside);
+		misc.children.push(field);
+		ident.children.push(misc);
+	}
 	// ids and default names in score order again (P1, P2, …)
 	const rename = new Map();
 	parts.forEach((part, n) => rename.set(attr(part, "id"), `P${n + 1}`));
