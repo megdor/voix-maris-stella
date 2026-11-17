@@ -505,7 +505,10 @@ function parseScore(xmlText){
   { const ms=kids(parts[0],"measure"); const st=[]; ms.forEach((m,i)=>{ if(i===0||m.querySelector("print[new-page='yes']")) st.push(i); }); st.push(ms.length);
     const per=st.slice(1).map((v,k)=>v-st[k]); const worst=Math.max(0,...per);
     if(worst>40) layoutWarn=`la page ${per.indexOf(worst)+1} donne ${worst} mesures, ce qui est impossible`;
-    else if(parts.length>18) layoutWarn=`${parts.length} portées différentes ont été trouvées`; }
+    else if(parts.length>18) layoutWarn=`${parts.length} portées différentes ont été trouvées`;
+    else { // voix morcelées : beaucoup de parties qui ne chantent que dans un petit bout de la pièce
+      const nb=ms.length; const sparse=parts.filter(p=>barsWithNotes(p).length<0.25*nb).length;
+      if(nb>=16 && sparse>=3 && sparse>=0.3*parts.length) layoutWarn=`les portées n'ont pas pu être suivies d'une page à l'autre (${sparse} parties sur ${parts.length} ne sont lues que par morceaux)`; } }
   const asideTxt=[...doc.querySelectorAll("miscellaneous-field")].find(f=>f.getAttribute("name")==="pages-a-part")?.textContent;
   const setAside=asideTxt?+asideTxt:0;
   return {title:title.trim(),composer:composer.trim(),tracks,events,timeline,measInfo,totalQ,tempos,xml:xmlText,suspects,vocalSuspects,layoutWarn,setAside,
