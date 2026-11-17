@@ -26,7 +26,11 @@ export async function pagesFromPdf(file) {
 	for (let n = 1; n <= doc.numPages; n++) {
 		const page = await doc.getPage(n);
 		const base = page.getViewport({ scale: 1 });
-		const scale = Math.min(300 / 72, 3600 / Math.max(base.width, base.height));
+		// Chœur Maris Stella : une double page (livre photographié ouvert, scan de deux pages
+		// côte à côte) est coupée en deux pages, chacune lue à pleine résolution
+		const spread = base.width >= 1.25 * base.height;
+		const side = spread ? Math.max(base.width / 2, base.height) : Math.max(base.width, base.height);
+		const scale = Math.min(300 / 72, 3600 / side);
 		const viewport = page.getViewport({ scale });
 		const canvas = document.createElement("canvas");
 		canvas.width = Math.round(viewport.width);
@@ -35,11 +39,52 @@ export async function pagesFromPdf(file) {
 		ctx.fillStyle = "#fff";
 		ctx.fillRect(0, 0, canvas.width, canvas.height);
 		await page.render({ canvasContext: ctx, canvas, viewport }).promise;
-		blobs.push(await new Promise((res) => canvas.toBlob(res, "image/png")));
+		if (spread) {
+			const cut = gutter(ctx, canvas.width, canvas.height);
+			for (const [x0, x1] of [
+				[0, cut],
+				[cut, canvas.width],
+			]) {
+				const half = document.createElement("canvas");
+				half.width = x1 - x0;
+				half.height = canvas.height;
+				half.getContext("2d").drawImage(canvas, x0, 0, x1 - x0, canvas.height, 0, 0, x1 - x0, canvas.height);
+				blobs.push(await new Promise((res) => half.toBlob(res, "image/png")));
+			}
+		} else {
+			blobs.push(await new Promise((res) => canvas.toBlob(res, "image/png")));
+		}
 		page.cleanup();
 	}
 	await task.destroy(); // libère la mémoire du document
 	return blobs;
+}
+
+/** Where two facing pages meet: the column of the middle fifth with the least ink. */
+function gutter(ctx, w, h) {
+	const a = Math.round(w * 0.4);
+	const b = Math.round(w * 0.6);
+	const { data } = ctx.getImageData(a, 0, b - a, h);
+	const ink = new Array(b - a).fill(0);
+	for (let y = 0; y < h; y += 4) {
+		for (let x = 0; x < b - a; x++) {
+			const i = (y * (b - a) + x) * 4;
+			if (data[i] + data[i + 1] + data[i + 2] < 3 * 140) {
+				ink[x]++;
+			}
+		}
+	}
+	// lissé sur quelques colonnes : une ligne de portée qui passe ne fait pas la coupure
+	let best = Math.round((b - a) / 2);
+	let low = Number.POSITIVE_INFINITY;
+	for (let x = 3; x < b - a - 3; x++) {
+		const v = ink[x - 3] + ink[x - 2] + ink[x - 1] + ink[x] + ink[x + 1] + ink[x + 2] + ink[x + 3];
+		if (v < low) {
+			low = v;
+			best = x;
+		}
+	}
+	return a + best;
 }
 
 /** Images (Blobs or Files) as addImages takes them, in order. PDF files give one image per page. */
