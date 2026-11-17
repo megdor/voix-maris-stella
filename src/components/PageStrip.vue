@@ -1,6 +1,7 @@
 <script setup>
 // The pages, in score order, as thumbnails: click one to show it; the
 // current one can be moved earlier / later or removed.
+import { ref, watch } from "vue";
 import { useOmrState } from "../useOmr.js";
 
 defineProps({
@@ -8,6 +9,17 @@ defineProps({
 	show: { type: String, default: "photo" }, // "photo" | "page"
 });
 const omr = useOmrState();
+// a long work (mass, oratorio): one movement at a time reads far better
+const from = ref(1);
+const to = ref(1);
+watch(
+	() => omr.pages.length,
+	(n) => {
+		from.value = 1;
+		to.value = n;
+	},
+	{ immediate: true },
+);
 </script>
 
 <template>
@@ -57,7 +69,22 @@ const omr = useOmrState();
 				✕ Retirer la page {{ omr.currentIndex + 1 }}
 			</button>
 		</div>
-		<div v-else class="actions">
+		<div v-if="omr.pages.length > 4" class="actions keep">
+			<label>
+				Œuvre longue ? Ne garder que les pages
+				<input v-model.number="from" type="number" min="1" :max="omr.pages.length" />
+				à
+				<input v-model.number="to" type="number" min="1" :max="omr.pages.length" />
+			</label>
+			<button
+				class="secondary"
+				title="Lire un seul mouvement : les autres pages sont retirées"
+				@click="omr.keepPages(from, to)"
+			>
+				Garder ces pages
+			</button>
+		</div>
+		<div v-if="omr.pages.length <= 1" class="actions">
 			<button class="secondary" title="Retirer cette page" @click="omr.removePage(0)">
 				✕ Retirer
 			</button>
@@ -66,6 +93,10 @@ const omr = useOmrState();
 </template>
 
 <style scoped>
+.keep input {
+	width: 4em;
+}
+
 .page-strip {
 	display: flex;
 	flex-wrap: wrap;
