@@ -366,6 +366,7 @@ function parseScore(xmlText){
           if(m.getAttribute("implicit")==="yes") info.implicit=true;
           if(el.querySelector("rest")||isCue) continue;
           const step=txt(el,"pitch > step"); if(!step) continue;
+          { const vk=pid+"|"+(txt(el,"voice")||"1"); if(info.vd&&info.vd[vk]) info.vd[vk].n=true; }
           let midi=12*((+txt(el,"pitch > octave"))+1)+STEP[step]+Math.round(+(txt(el,"pitch > alter")||0))+transpose;
           const voice=accomp?"acc":(txt(el,"voice")||"1");
           const staff=txt(el,"staff")||"1";
@@ -384,6 +385,12 @@ function parseScore(xmlText){
   });
   // longueur par défaut si mesure vide
   measInfo.forEach(i=>{ if(!i.len) i.len=i.beats*4/i.beatType; });
+  // levée (première ou dernière mesure incomplète) : sa longueur est celle des voix qui chantent ; des
+  // silences mal lus dans les voix muettes ne doivent pas l'allonger
+  measInfo.forEach((i,mi)=>{ if(!(mi===0||mi===measInfo.length-1||i.implicit)) return;
+    const sung=Object.values(i.vd||{}).filter(v=>v.n&&v.d>0.001); if(!sung.length) return;
+    const L=Math.max(...sung.map(v=>v.d)); const exp=sung[0].exp;
+    if(L<exp-0.01 && sung.every(v=>Math.abs(v.d-L)<0.01||v.acc)) i.len=L; });
 
   // Deux voix sur une portée (soprano + alto…) qui finissent la mesure ensemble : la lecture n'écrit souvent
   // la fin commune (note à l'unisson ou silence) que dans une des deux voix. La voix qui s'arrête trop tôt
@@ -659,8 +666,12 @@ function checkScore(measInfo, tracks, events, timeline, partNames){
   const fmt=x=>{ const r=Math.round(x*100)/100; return (r+"").replace(".",","); };
   const last=measInfo.length-1;
   measInfo.forEach((info,mi)=>{
-    const vd=Object.entries(info.vd||{}).filter(([,v])=>v.d>0.001);
+    let vd=Object.entries(info.vd||{}).filter(([,v])=>v.d>0.001);
     if(!vd.length) return;
+    // une voix qui ne fait que se taire dans la mesure : sa durée mal lue ne s'entend pas, sauf si elle
+    // allonge la mesure au-delà des voix qui chantent
+    { const sung=vd.filter(([,v])=>v.n); if(sung.length){ const L=Math.max(...sung.map(([,v])=>v.d));
+        vd=vd.filter(([,v])=>v.n || (v.d>L+0.01 && info.len>L+0.01)); } }
     const voc=vd.filter(([,v])=>!v.acc);
     const pickup=(mi===0||mi===last||info.implicit) && vd.every(([,v])=>v.d<=v.exp+0.01) &&
       (voc.length? voc.every(([,v])=>Math.abs(v.d-voc[0][1].d)<0.01) : true);
