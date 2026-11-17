@@ -504,7 +504,9 @@ function parseScore(xmlText){
     const per=st.slice(1).map((v,k)=>v-st[k]); const worst=Math.max(0,...per);
     if(worst>40) layoutWarn=`la page ${per.indexOf(worst)+1} donne ${worst} mesures, ce qui est impossible`;
     else if(parts.length>18) layoutWarn=`${parts.length} portées différentes ont été trouvées`; }
-  return {title:title.trim(),composer:composer.trim(),tracks,events,timeline,measInfo,totalQ,tempos,xml:xmlText,suspects,vocalSuspects,layoutWarn,
+  const asideTxt=[...doc.querySelectorAll("miscellaneous-field")].find(f=>f.getAttribute("name")==="pages-a-part")?.textContent;
+  const setAside=asideTxt?+asideTxt:0;
+  return {title:title.trim(),composer:composer.trim(),tracks,events,timeline,measInfo,totalQ,tempos,xml:xmlText,suspects,vocalSuspects,layoutWarn,setAside,
     hasRepeats:order.length!==measInfo.length};
 }
 
@@ -1025,9 +1027,11 @@ function showReliability(){
   const accOnly=[...S.suspects.keys()].filter(m=>!S.vocalSuspects.has(m)).sort((a,b)=>a-b);
   const num=m=>S.measInfo[m].num;
   box.classList.remove("hidden","ok","warn","bad");
-  const accLine = accOnly.length ? `<div style="margin-top:6px;opacity:.85">ℹ︎ L'accompagnement peut être approximatif aux mesures ${accOnly.map(num).join(", ")} (les voix chantées n'y sont pas en cause).</div>` : "";
+  const asideLine = S.setAside ? `<div style="margin-top:6px;opacity:.85">ℹ︎ ${S.setAside} page(s) d'une seule portée, placée(s) après la partition (partie séparée d'un instrument, sans doute), ont été laissées de côté.</div>` : "";
+  const accLine0 = accOnly.length ? `<div style="margin-top:6px;opacity:.85">ℹ︎ L'accompagnement peut être approximatif aux mesures ${accOnly.map(num).join(", ")} (les voix chantées n'y sont pas en cause).</div>` : "";
+  const accLine = accLine0 + asideLine;
   if(S.layoutWarn){ box.classList.add("bad");
-    box.innerHTML=`⚠ <b>Partition non reconnue correctement : ${S.layoutWarn}.</b> C'est le cas d'un conducteur d'orchestre ou d'une page très dense : les voix ne sont pas fiables. Utilisez plutôt la réduction chant-piano ou les parties de chœur.`+accLine; return; }
+    box.innerHTML=`⚠ <b>Partition non reconnue correctement : ${S.layoutWarn}.</b> C'est le cas d'un conducteur d'orchestre, d'une page très dense ou d'une page qui n'est pas la partition du chœur (partie séparée, texte…) : les voix ne sont pas fiables. Retirez une telle page à l'étape « 2 · Pages », ou utilisez la réduction chant-piano.`+accLine; return; }
   if(!voc.length){ box.classList.add("ok");
     box.innerHTML="✓ <b>Aucune anomalie détectée dans les voix chantées.</b> Les contrôles automatiques (durée des mesures, notes isolées, grands sauts, registre de chaque voix) sont tous passés. Ils repèrent la plupart des erreurs de lecture, mais pas toutes : une fausse note plausible reste invisible."+accLine; return; }
   const share=voc.length/n;
