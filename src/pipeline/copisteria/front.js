@@ -722,13 +722,34 @@ function sameCuts(syms, staves, A, B, mask, forced, diag) {
 	const ia = a.xs.slice(1, -1);
 	const ib = b.xs.slice(1, -1);
 	const sp = (a.sp + b.sp) / 2;
-	diag.push({ a: ia.map(Math.round), b: ib.map(Math.round), n: [A.length, B.length] });
+	// the space between the two groups, against the space between staves inside them:
+	// a staff group cut from its system sits at the usual distance (Veni Veni: Part I
+	// alone, then Parts II, III and the piano), a system of its own further away (Verdi)
+	const gaps = [];
+	for (const ks of [A, B]) {
+		for (let j = 1; j < ks.length; j++) {
+			gaps.push((staves[ks[j]].y0 - staves[ks[j - 1]].y1) / sp);
+		}
+	}
+	gaps.sort((x, y) => x - y);
+	const g = gaps.length ? gaps[gaps.length >> 1] : null;
+	const between = (staves[B[0]].y0 - staves[A[A.length - 1]].y1) / sp;
+	const close = g !== null && between <= 1.25 * g + 0.5;
+	diag.push({
+		a: ia.map(Math.round),
+		b: ib.map(Math.round),
+		n: [A.length, B.length],
+		sp: Math.round(sp),
+		g: g === null ? null : Math.round(g * 10) / 10,
+		between: Math.round(between * 10) / 10,
+	});
 	if (ia.length !== ib.length || ia.length < 2) {
 		return false;
 	}
-	// two inner bar lines only: they must coincide (a staff group cut from its system:
-	// a third of a space apart; two systems engraved alike: three quarters of a space)
-	const tol = ia.length >= 3 ? 1 : 0.45;
+	// two inner bar lines only: they must coincide (two systems engraved alike lie
+	// three quarters of a space apart, Verdi), unless the groups sit as close as the
+	// staves of one system
+	const tol = ia.length >= 3 || close ? 1 : 0.45;
 	return ia.every((x, j) => Math.abs(x - ib[j]) <= tol * sp);
 }
 
