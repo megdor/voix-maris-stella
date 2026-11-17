@@ -476,8 +476,16 @@ function parseScore(xmlText){
   // le nombre de portées chantées change d'une page à l'autre (soliste qui entre, chœur réduit…) : la
   // lecture associe les portées aux voix d'après leur clé et leur registre, ce qui peut se tromper
   // entre voix semblables (soliste / 1re voix) : première mesure de la page signalée
+  let swaps=0, pageBreaks=0;
   { const acc=accompParts(parts, partNames);
     const starts=[0]; kids(parts[0],"measure").forEach((m,i)=>{ if(i>0 && m.querySelector("print[new-page='yes']")) starts.push(i); });
+    pageBreaks=starts.length-1;
+    // une voix qui s'arrête à un saut de page pendant qu'une voix semblable (même clé, même registre)
+    // commence : c'est sans doute la même voix, passée d'une piste à l'autre
+    const STEPN={C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+    const sigOf=p=>{ const ps=[...p.querySelectorAll("note pitch")].map(q=>12*((+txt(q,"octave"))+1)+STEPN[txt(q,"step")]).filter(x=>!isNaN(x));
+      return {clef:txt(p,"clef > sign"), mean:ps.length?ps.reduce((a,b)=>a+b,0)/ps.length:0}; };
+    const sigs=parts.map(sigOf);
     if(starts.length>1){
       const vocal=parts.map((p,i)=>i).filter(i=>!acc.has(i));
       const bars=vocal.map(i=>new Set(barsWithNotes(parts[i])));
@@ -485,6 +493,15 @@ function parseScore(xmlText){
       let prev=null;
       starts.forEach((a,k)=>{ const b=k+1<starts.length?starts[k+1]:nM;
         const on=vocal.filter((_,v)=>{ for(let m=a;m<b;m++) if(bars[v].has(m)) return true; return false; });
+        if(prev && on.length && prev.length && on.length===prev.length){
+          const gone=prev.filter(i=>!on.includes(i)), come=on.filter(i=>!prev.includes(i));
+          if(gone.some(x=>come.some(y=>sigs[x].clef===sigs[y].clef && Math.abs(sigs[x].mean-sigs[y].mean)<=5))){
+            swaps++;
+            let m0=a; while(m0<b && !on.some(i=>bars[vocal.indexOf(i)].has(m0))) m0++;
+            const l=suspects.get(m0)||suspects.set(m0,[]).get(m0);
+            if(!l.some(x=>x.who==="Mise en page")) l.push({who:"Mise en page",why:"une voix semble passer d'une piste à une autre ici : vérifiez que chaque voix suit bien sa portée",acc:false});
+          }
+        }
         if(prev && on.length && prev.length && on.length!==prev.length){
           let m0=a; while(m0<b && !on.some(i=>bars[vocal.indexOf(i)].has(m0))) m0++;
           const l=suspects.get(m0)||suspects.set(m0,[]).get(m0);
@@ -506,6 +523,7 @@ function parseScore(xmlText){
     const per=st.slice(1).map((v,k)=>v-st[k]); const worst=Math.max(0,...per);
     if(worst>40) layoutWarn=`la page ${per.indexOf(worst)+1} donne ${worst} mesures, ce qui est impossible`;
     else if(parts.length>18) layoutWarn=`${parts.length} portées différentes ont été trouvées`;
+    else if(swaps>=3 && swaps>=0.15*pageBreaks) layoutWarn=`les voix changent de piste d'une page à l'autre (${swaps} fois)`;
     else { // voix morcelées : beaucoup de parties qui ne chantent que dans un petit bout de la pièce
       const nb=ms.length; const sparse=parts.filter(p=>barsWithNotes(p).length<0.25*nb).length;
       if(nb>=16 && sparse>=3 && sparse>=0.3*parts.length) layoutWarn=`les portées n'ont pas pu être suivies d'une page à l'autre (${sparse} parties sur ${parts.length} ne sont lues que par morceaux)`; } }
