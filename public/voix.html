@@ -464,6 +464,26 @@ function parseScore(xmlText){
   { const sp=sparseMulti(parts); parts.forEach((p,i)=>{ if(!sp[i]) return;
       barsWithNotes(p).forEach(mi=>{ const l=suspects.get(mi)||suspects.set(mi,[]).get(mi);
         if(!l.some(x=>x.who==="Mise en page")) l.push({who:"Mise en page",why:"ce système a une portée de plus ou de moins que les autres : la lecture a pu mélanger les voix",acc:false}); }); }); }
+  // le nombre de portées chantées change d'une page à l'autre (soliste qui entre, chœur réduit…) : la
+  // lecture associe les portées aux voix d'après leur clé et leur registre, ce qui peut se tromper
+  // entre voix semblables (soliste / 1re voix) : première mesure de la page signalée
+  { const acc=accompParts(parts, partNames);
+    const starts=[0]; kids(parts[0],"measure").forEach((m,i)=>{ if(i>0 && m.querySelector("print[new-page='yes']")) starts.push(i); });
+    if(starts.length>1){
+      const vocal=parts.map((p,i)=>i).filter(i=>!acc.has(i));
+      const bars=vocal.map(i=>new Set(barsWithNotes(parts[i])));
+      const nM=kids(parts[0],"measure").length;
+      let prev=null;
+      starts.forEach((a,k)=>{ const b=k+1<starts.length?starts[k+1]:nM;
+        const on=vocal.filter((_,v)=>{ for(let m=a;m<b;m++) if(bars[v].has(m)) return true; return false; });
+        if(prev && on.length && prev.length && on.length!==prev.length){
+          let m0=a; while(m0<b && !on.some(i=>bars[vocal.indexOf(i)].has(m0))) m0++;
+          const l=suspects.get(m0)||suspects.set(m0,[]).get(m0);
+          if(!l.some(x=>x.who==="Mise en page")) l.push({who:"Mise en page",why:"le nombre de voix écrites change ici ("+prev.length+" → "+on.length+") : vérifiez que chaque voix suit bien sa portée",acc:false});
+        }
+        if(on.length) prev=on;
+      });
+    } }
   // carte des tempos (en noires dépliées)
   const tempos=[];
   timeline.forEach(seg=>{ (measInfo[seg.m].tempo||[]).forEach(tp=>tempos.push({q:seg.q0+tp.t,bpm:tp.bpm})); });
