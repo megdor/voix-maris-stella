@@ -513,8 +513,14 @@ export function joinTrees(trees) {
 			const sp = new El("score-part", { id });
 			sp.sub("part-name", `Part ${nextId}`);
 			const part = new El("part", { id });
+			// its empty bars keep the page breaks of the score (the player counts
+			// the bars of each page from them, in any part)
+			const model = parts.length ? childrenOf(parts[0], "measure") : [];
 			for (let i = 1; i <= measures; i++) {
-				part.sub("measure", null, { number: i });
+				const m = part.sub("measure", null, { number: i });
+				for (const pr of (model[i - 1]?.children ?? []).filter((c) => c.tag === "print")) {
+					m.children.push(clone(pr));
+				}
 			}
 			// in the part list and the score, before score part `before` (or last)
 			const anchor = parts[before];
