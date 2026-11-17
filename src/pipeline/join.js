@@ -246,12 +246,13 @@ function pairMeasures(upper, lower) {
 	return out;
 }
 const NEW_PART = 40; // a part first met on this page
+const CONTINUE = 12; // a part heard on the page before (a voice goes on)
 
 /**
  * Page part j → score part index (or -1: a new part), in order, at the least
  * total unlikeness (an alignment: parts never swap places).
  */
-function matchParts(old, page) {
+function matchParts(old, page, recent = []) {
 	const I = old.length;
 	const J = page.length;
 	const cost = Array.from({ length: I + 1 }, () => new Array(J + 1).fill(Infinity));
@@ -267,7 +268,7 @@ function matchParts(old, page) {
 				continue;
 			}
 			if (i < I && j < J) {
-				const v = c + unlike(old[i], page[j]);
+				const v = c + unlike(old[i], page[j]) - (recent[i] ? CONTINUE : 0);
 				if (v < cost[i + 1][j + 1]) {
 					cost[i + 1][j + 1] = v;
 					move[i + 1][j + 1] = "match";
@@ -450,6 +451,7 @@ export function joinTrees(trees) {
 	const sigs = parts.map(signature);
 	let nextId = parts.length;
 	let setAside = 0;
+	let prevCount = measures;
 	for (const tree of trees.slice(1)) {
 		const pageParts = partsOf(tree);
 		// a page of one staff only, many bars long, after pages of a choir: an
@@ -464,7 +466,13 @@ export function joinTrees(trees) {
 			continue;
 		}
 		const pageSigs = pageParts.map(signature);
-		const plan = matchParts(sigs, pageSigs);
+		// score parts heard on the page before: a voice goes on from page to page,
+		// so the staves of this page are matched with them first
+		const recent = parts.map((part) => {
+			const ms = childrenOf(part, "measure");
+			return ms.slice(Math.max(0, ms.length - prevCount)).some(hasNotes);
+		});
+		const plan = matchParts(sigs, pageSigs, recent);
 		// score parts that are the two staves of one part (seen whole on this page):
 		// put back together first, from the last, shifting the plan's indices
 		const merges = plan.filter((p) => p.merge !== undefined).map((p) => p.to).sort((a, b) => b - a);
@@ -554,6 +562,7 @@ export function joinTrees(trees) {
 			}
 		});
 		measures += count;
+		prevCount = count;
 	}
 	mergeFragments(root, plist, parts);
 	dropEmptyBars(parts);
