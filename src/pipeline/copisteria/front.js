@@ -726,7 +726,9 @@ function sameCuts(syms, staves, A, B, mask, forced, diag) {
 	if (ia.length !== ib.length || ia.length < 2) {
 		return false;
 	}
-	const tol = ia.length >= 3 ? 1 : 0.75;
+	// two inner bar lines only: they must coincide (a staff group cut from its system:
+	// a third of a space apart; two systems engraved alike: three quarters of a space)
+	const tol = ia.length >= 3 ? 1 : 0.45;
 	return ia.every((x, j) => Math.abs(x - ib[j]) <= tol * sp);
 }
 
