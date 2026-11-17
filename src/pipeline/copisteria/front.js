@@ -609,7 +609,7 @@ function buildSystems(syms, staves, mask, ink, levels, linksModel, forced) {
 			systems.push({ staves: [k], columns: [] });
 		}
 	});
-	const mergeDiag = mergeAligned(syms, staves, systems, ink, mask, forced);
+	const mergeDiag = mergeAligned(syms, staves, systems, Boolean(mask), mask, forced);
 	systems.forEach((sy, n) => {
 		sy.staves.forEach((k, pos) => {
 			staves[k].system = n;
