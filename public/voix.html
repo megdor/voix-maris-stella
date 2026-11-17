@@ -523,7 +523,11 @@ function parseScore(xmlText){
             if(!l.some(x=>x.who==="Mise en page")) l.push({who:"Mise en page",why:"une voix semble passer d'une piste à une autre ici : vérifiez que chaque voix suit bien sa portée",acc:false});
           }
         }
-        if(prev && on.length && prev.length && on.length!==prev.length){
+        // une seule voix qui entre ou se tait, chantant sur un passage seulement (Descant de Veni Veni) :
+        // c'est l'écriture, pas une portée perdue
+        const chg=prev? prev.filter(i=>!on.includes(i)).concat(on.filter(i=>!prev.includes(i))) : [];
+        const passage=chg.length===1 && Math.abs(on.length-(prev?prev.length:0))===1 && (()=>{ const n=bars[vocal.indexOf(chg[0])].size; return n>=6 && n<0.4*nM; })();
+        if(prev && on.length && prev.length && on.length!==prev.length && !passage){
           let m0=a; while(m0<b && !on.some(i=>bars[vocal.indexOf(i)].has(m0))) m0++;
           const l=suspects.get(m0)||suspects.set(m0,[]).get(m0);
           if(!l.some(x=>x.who==="Mise en page")) l.push({who:"Mise en page",why:"le nombre de voix écrites change ici ("+prev.length+" → "+on.length+") : vérifiez que chaque voix suit bien sa portée",acc:false});
