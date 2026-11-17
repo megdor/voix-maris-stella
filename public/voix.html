@@ -483,10 +483,12 @@ function parseScore(xmlText){
   { const hi=new Set(parts.filter(p=>!VOCAL.test(partNames[p.getAttribute("id")]||"") && highInstrument(p)).map(p=>p.getAttribute("id")));
     tracks.forEach(t=>{ if(hi.has(t.key.split("|")[0]) && /^(Accompagnement|part|partie|p\s*\d*)/i.test(t.name)) t.name="Instrument aigu (violon, flûte…)"; }); }
   const suspects=checkScore(measInfo, tracks, events, timeline, partNames);
-  { const seen=new Set(); octFixed.forEach(({m,key})=>{ const k=m+"|"+key; if(seen.has(k)) return; seen.add(k);
+  // signalée une fois par passage corrigé (sa première mesure), pas à chaque mesure du système
+  { const seen=new Set(); const all=new Set(octFixed.map(({m,key})=>m+"|"+key));
+    octFixed.forEach(({m,key})=>{ const k=m+"|"+key; if(seen.has(k) || all.has((m-1)+"|"+key)) return; seen.add(k);
       const t=tracks.find(t=>t.key===(alias[key]||key))||tracks.find(t=>t.key.startsWith(key.split("|")[0]+"|"));
       const l=suspects.get(m)||suspects.set(m,[]).get(m);
-      l.push({who:t?t.name.replace(/ — voix \d+$/,""):"Voix", why:"clé lue sans (ou avec) le petit 8 : octave corrigée automatiquement, à vérifier", acc:false}); }); }
+      l.push({who:t?t.name.replace(/ — voix \d+$/,""):"Voix", why:"clé lue sans (ou avec) le petit 8 : octave corrigée automatiquement à partir d'ici, à vérifier", acc:false}); }); }
   // systèmes à la mise en page différente (portée en plus ou en moins) : voix probablement mélangées
   { const sp=sparseMulti(parts); parts.forEach((p,i)=>{ if(!sp[i]) return;
       barsWithNotes(p).forEach(mi=>{ const l=suspects.get(mi)||suspects.set(mi,[]).get(mi);
@@ -790,7 +792,11 @@ function checkScore(measInfo, tracks, events, timeline, partNames){
     // (refrain, phrase reprise), pas une erreur de lecture : la reconnaissance ne se trompe pas deux fois pareil
     const sig=new Map(); byM.forEach(arr=>{ const k=arr.join(","); sig.set(k,(sig.get(k)||0)+1); });
     byM.forEach((arr,m)=>{ const mean=arr.reduce((x,y)=>x+y,0)/arr.length;
-      if(arr.length>=2 && Math.abs(mean-med)>=10 && sig.get(arr.join(","))<2) add(m, t.name, `registre inhabituel (${mean>med?"trop aigu":"trop grave"} pour cette voix : clé ou octave mal lue ?)`); });
+      // moins d'une octave d'écart et des notes que la voix chante couramment (Ama Namin : la basse
+      // tenue sur fa grave puis la phrase au médium) : écrit ainsi, pas une octave mal lue
+      const R=t.clef==="F"?[38,64]:t.clef==="G8"?[45,69]:t.clef==="G"?[53,81]:null;
+      const usual=R && Math.abs(mean-med)<12 && arr.every(x=>x>=R[0]&&x<=R[1]);
+      if(arr.length>=2 && Math.abs(mean-med)>=10 && !usual && sig.get(arr.join(","))<2) add(m, t.name, `registre inhabituel (${mean>med?"trop aigu":"trop grave"} pour cette voix : clé ou octave mal lue ?)`); });
   });
   return S;
 }
