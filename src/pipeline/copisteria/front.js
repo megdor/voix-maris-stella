@@ -717,7 +717,11 @@ function sameBars(syms, staves, A, B, diag = []) {
 }
 
 function sameCuts(syms, staves, A, B, mask, forced, diag) {
-	if (A.length < 2 || B.length < 2 || A.length + B.length < 6) {
+	// same layout twice (S+A, then S+A again): two systems unless the bars
+	// agree on many places; different layouts (the choir, then the piano;
+	// one group of voices, then the next): one system when the bars agree
+	const same = A.length === B.length;
+	if (same ? A.length < 3 : A.length + B.length < 4) {
 		return false;
 	}
 	const a = segmentCuts(syms, staves, { staves: A }, mask, forced);
@@ -725,11 +729,19 @@ function sameCuts(syms, staves, A, B, mask, forced, diag) {
 	const ia = a.xs.slice(1, -1);
 	const ib = b.xs.slice(1, -1);
 	const sp = (a.sp + b.sp) / 2;
-	diag.push({ a: ia.map(Math.round), b: ib.map(Math.round), sp: Math.round(sp) });
-	if (ia.length < 3 || ia.length !== ib.length) {
+	const between = (staves[B[0]].y0 - staves[A[A.length - 1]].y1) / sp;
+	diag.push({
+		a: ia.map(Math.round),
+		b: ib.map(Math.round),
+		n: [A.length, B.length],
+		sp: Math.round(sp),
+		gap: Math.round(between),
+	});
+	if (ia.length !== ib.length || ia.length < (same ? 3 : 2)) {
 		return false;
 	}
-	if (!ia.every((x, j) => Math.abs(x - ib[j]) <= sp)) {
+	const tol = same || ia.length >= 3 ? 1 : 0.75;
+	if (!ia.every((x, j) => Math.abs(x - ib[j]) <= tol * sp)) {
 		return false;
 	}
 	const gaps = [];
@@ -739,8 +751,7 @@ function sameCuts(syms, staves, A, B, mask, forced, diag) {
 		}
 	}
 	gaps.sort((x, y) => x - y);
-	const g = gaps[gaps.length >> 1];
-	const between = (staves[B[0]].y0 - staves[A[A.length - 1]].y1) / sp;
+	const g = gaps.length ? gaps[gaps.length >> 1] : 2;
 	return between <= 2.5 * Math.max(g, 2);
 }
 
