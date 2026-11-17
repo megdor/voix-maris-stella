@@ -497,7 +497,14 @@ function parseScore(xmlText){
   tempos.sort((a,b)=>a.q-b.q);
   if(!tempos.length||tempos[0].q>0) tempos.unshift({q:0,bpm:tempos.length?tempos[0].bpm:76});
   const vocalSuspects=new Set([...suspects].filter(([,r])=>r.some(x=>!x.acc)).map(([m])=>m));
-  return {title:title.trim(),composer:composer.trim(),tracks,events,timeline,measInfo,totalQ,tempos,xml:xmlText,suspects,vocalSuspects,
+  // lecture manifestement ratée : une page de plus de 40 mesures (systèmes d'un conducteur d'orchestre
+  // découpés en morceaux mis bout à bout) ou plus de 18 parties
+  let layoutWarn=null;
+  { const ms=kids(parts[0],"measure"); const st=[]; ms.forEach((m,i)=>{ if(i===0||m.querySelector("print[new-page='yes']")) st.push(i); }); st.push(ms.length);
+    const per=st.slice(1).map((v,k)=>v-st[k]); const worst=Math.max(0,...per);
+    if(worst>40) layoutWarn=`la page ${per.indexOf(worst)+1} donne ${worst} mesures, ce qui est impossible`;
+    else if(parts.length>18) layoutWarn=`${parts.length} portées différentes ont été trouvées`; }
+  return {title:title.trim(),composer:composer.trim(),tracks,events,timeline,measInfo,totalQ,tempos,xml:xmlText,suspects,vocalSuspects,layoutWarn,
     hasRepeats:order.length!==measInfo.length};
 }
 
@@ -1019,6 +1026,8 @@ function showReliability(){
   const num=m=>S.measInfo[m].num;
   box.classList.remove("hidden","ok","warn","bad");
   const accLine = accOnly.length ? `<div style="margin-top:6px;opacity:.85">ℹ︎ L'accompagnement peut être approximatif aux mesures ${accOnly.map(num).join(", ")} (les voix chantées n'y sont pas en cause).</div>` : "";
+  if(S.layoutWarn){ box.classList.add("bad");
+    box.innerHTML=`⚠ <b>Partition non reconnue correctement : ${S.layoutWarn}.</b> C'est le cas d'un conducteur d'orchestre ou d'une page très dense : les voix ne sont pas fiables. Utilisez plutôt la réduction chant-piano ou les parties de chœur.`+accLine; return; }
   if(!voc.length){ box.classList.add("ok");
     box.innerHTML="✓ <b>Aucune anomalie détectée dans les voix chantées.</b> Les contrôles automatiques (durée des mesures, notes isolées, grands sauts, registre de chaque voix) sont tous passés. Ils repèrent la plupart des erreurs de lecture, mais pas toutes : une fausse note plausible reste invisible."+accLine; return; }
   const share=voc.length/n;
