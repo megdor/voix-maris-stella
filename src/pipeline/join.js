@@ -338,7 +338,8 @@ const hasNotes = (m) =>
  * (a choir on some pages only, its staves not always in the same place): two
  * parts that never sound in the same bar, with the same staves, the same clefs
  * and about the same register, each present in less than 60 % of the bars,
- * are one part: the later one's bars go into the earlier one.
+ * are one part: the later one's bars go into the earlier one. So is a scrap of
+ * one or two bars, whatever the size of the part it belongs to.
  */
 function mergeFragments(root, plist, parts) {
 	const bars = (part) => childrenOf(part, "measure");
@@ -352,7 +353,10 @@ function mergeFragments(root, plist, parts) {
 			for (let b = a + 1; b < parts.length; b++) {
 				const A = sig[a];
 				const B = sig[b];
-				if (A.staves !== B.staves || used[a].size >= 0.6 * total || used[b].size >= 0.6 * total) {
+				// a scrap of a few bars (a staff read twice at a system's end) joins its
+				// part however long that part is
+				const scrap = Math.min(used[a].size, used[b].size) <= 2;
+				if (A.staves !== B.staves || (!scrap && (used[a].size >= 0.6 * total || used[b].size >= 0.6 * total))) {
 					continue;
 				}
 				if ([...A.clefs].some(([k, v]) => B.clefs.has(k) && B.clefs.get(k) !== v)) {
