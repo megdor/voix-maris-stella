@@ -1063,7 +1063,7 @@ function showReliability(){
   const accLine0 = accOnly.length ? `<div style="margin-top:6px;opacity:.85">ℹ︎ L'accompagnement peut être approximatif aux mesures ${accOnly.map(num).join(", ")} (les voix chantées n'y sont pas en cause).</div>` : "";
   const accLine = accLine0 + asideLine;
   if(S.layoutWarn){ box.classList.add("bad");
-    box.innerHTML=`⚠ <b>Partition non reconnue correctement : ${S.layoutWarn}.</b> Causes habituelles : photocopie de mauvaise qualité, conducteur d'orchestre, page très dense, ou page qui n'est pas la partition du chœur (partie séparée, texte…). Les voix ne sont pas fiables : retirez une telle page à l'étape « 2 · Pages », ou utilisez un meilleur scan ou la réduction chant-piano.`+accLine; return; }
+    box.innerHTML=`⚠ <b>Partition non reconnue correctement : ${S.layoutWarn}.</b> Causes habituelles : photocopie de mauvaise qualité, conducteur d'orchestre, page très dense, ou page qui n'est pas la partition du chœur (partie séparée, texte…). Les voix ne sont pas fiables : retirez une telle page à l'étape « 2 · Pages », ou utilisez un meilleur scan ou la réduction chant-piano. Pour une œuvre longue (messe, plusieurs mouvements), lisez un mouvement à la fois.`+accLine; return; }
   if(!voc.length){ box.classList.add("ok");
     box.innerHTML="✓ <b>Aucune anomalie détectée dans les voix chantées.</b> Les contrôles automatiques (durée des mesures, notes isolées, grands sauts, registre de chaque voix) sont tous passés. Ils repèrent la plupart des erreurs de lecture, mais pas toutes : une fausse note plausible reste invisible."+accLine; return; }
   const share=voc.length/n;
