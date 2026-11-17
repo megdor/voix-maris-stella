@@ -33,7 +33,7 @@ import {
 	keepStorage,
 	putScore,
 } from "./library.js";
-import { imagesFromPhotos, titleFromFileName } from "./photos.js";
+import { imagesFromPhotos } from "./photos.js";
 import { fullQuad } from "./pipeline/capture/index.js";
 import {
 	detectPageCorners,
@@ -242,6 +242,24 @@ export function useOmr() {
 			0,
 			Math.min(currentIndex.value, pages.value.length - 1),
 		);
+	}
+
+	/** Keep pages `from` to `to` only (1-based, inclusive): one movement of a long work. */
+	function keepPages(from, to) {
+		const n = pages.value.length;
+		const a = Math.max(1, Math.min(n, Math.round(from)));
+		const b = Math.max(a, Math.min(n, Math.round(to)));
+		if (a === 1 && b === n) {
+			return;
+		}
+		resetResult();
+		pages.value.forEach((p, j) => {
+			if (j < a - 1 || j > b - 1) {
+				releasePage(p);
+			}
+		});
+		pages.value = pages.value.slice(a - 1, b);
+		currentIndex.value = 0;
 	}
 
 	/** Move page `i` one place earlier (-1) or later (+1). */
@@ -621,8 +639,6 @@ export function useOmr() {
 	/** Start a new score with these photos (Blobs) as its pages. */
 	async function newScoreWith(photos) {
 		newScore();
-		// Chœur Maris Stella : le titre de l'œuvre d'après le fichier, modifiable ensuite
-		title.value = titleFromFileName(photos[0]?.name);
 		addImages(await imagesFromPhotos(photos));
 	}
 
@@ -777,6 +793,7 @@ export function useOmr() {
 		resetResult,
 		addImages,
 		removePage,
+		keepPages,
 		movePage,
 		selectPage,
 		onCornersCommit,
