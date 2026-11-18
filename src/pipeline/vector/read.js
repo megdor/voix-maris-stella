@@ -1187,6 +1187,8 @@ export function systemTrees(page, ctx) {
 				const lyrics = cell.lyrics;
 				voices.forEach((voice, vi) => {
 					const evs = voice.evs;
+					// une pause seule vaut la mesure entière, quel que soit le chiffrage
+					if (evs.length === 1 && evs[0].rest && evs[0].whole && measLen) voice.end = voice.start + measLen;
 					if (vi > 0) {
 						const back = voices[vi - 1].end;
 						if (back > 0) meas.sub("backup").sub("duration", Math.round(back * DIV));
