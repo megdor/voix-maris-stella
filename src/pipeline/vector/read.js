@@ -685,13 +685,31 @@ export function readPage(raw, state = { keys: [], times: null }) {
 			...texts.filter((t) => t.str.trim() === "3" && inSys(t.y)).map((t) => ({ x: t.x, y: t.y })),
 		];
 		for (const t of threes) {
+			// les accords dont la hampe aboutit à une ligature
+			const onB = (b) =>
+				chords.filter((c) => {
+					if (!c.beams) return false; // une noire dont la hampe frôle la ligature voisine
+					if (!c.stem || c.stem.x < b.x0 - 0.3 * sp || c.stem.x > b.x1 + 0.3 * sp) return false;
+					const sp_ = spanAt(b.pts, Math.min(Math.max(c.stem.x, b.x0 + 0.01), b.x1 - 0.01));
+					if (!sp_) return false;
+					const end = c.up ? c.stem.y0 : c.stem.y1;
+					return end >= sp_[0] - 0.6 * sp && end <= sp_[1] + 0.6 * sp;
+				});
+			// un triolet vaut trois valeurs égales : 3 doubles, 3 croches, 3 noires (ou 2 notes et un silence)
+			const tripletLike = (g) => {
+				if (!g.length || g.some((c) => c.tuplet)) return false;
+				const sum = g.reduce((a, c) => a + c.dur, 0);
+				if ([0.375, 0.75, 1.5, 3].some((v) => Math.abs(sum - v) < 1e-6)) return true;
+				// deux notes égales : le silence complète le triolet
+				return g.length === 2 && Math.abs(g[0].dur - g[1].dur) < 1e-6 && !g.some((c) => c.dots);
+			};
 			const b = beams
 				.filter((b) => t.x >= b.x0 - sp && t.x <= b.x1 + sp)
 				.map((b) => {
 					const sp_ = spanAt(b.pts, Math.min(Math.max(t.x, b.x0 + 0.01), b.x1 - 0.01));
 					return { b, d: sp_ ? Math.min(Math.abs(sp_[0] - t.y), Math.abs(sp_[1] - t.y)) : 1e9 };
 				})
-				.filter((o) => o.d < 3.5 * sp)
+				.filter((o) => o.d < 3.5 * sp && tripletLike(onB(o.b)))
 				.sort((p, q) => p.d - q.d)[0]?.b;
 			let group = [];
 			// crochet de n-olet : traits horizontaux à la hauteur du « 3 », de part et d'autre
@@ -709,14 +727,7 @@ export function readPage(raw, state = { keys: [], times: null }) {
 				group = inside.filter((c) => c.k === kk);
 				group.push(...rests.filter((r) => r.k === kk && r.x >= x0 - 0.5 * sp && r.x <= x1 + 0.2 * sp));
 			} else if (b) {
-				// les accords dont la hampe aboutit à cette ligature
-				group = chords.filter((c) => {
-					if (!c.stem || c.stem.x < b.x0 - 0.3 * sp || c.stem.x > b.x1 + 0.3 * sp) return false;
-					const sp_ = spanAt(b.pts, Math.min(Math.max(c.stem.x, b.x0 + 0.01), b.x1 - 0.01));
-					if (!sp_) return false;
-					const end = c.up ? c.stem.y0 : c.stem.y1;
-					return end >= sp_[0] - 0.6 * sp && end <= sp_[1] + 0.6 * sp;
-				});
+				group = onB(b);
 				// un triolet qui commence ou finit par un silence : deux notes liées et ce silence
 				if (group.length === 2) {
 					const xs = group.map((c) => c.x).sort((a, b) => a - b);
@@ -904,11 +915,13 @@ function voicesOf(evs, sp) {
 		const dirs = (c) => new Set(c.filter((e) => !e.rest).map((e) => e.up));
 		const ys = (c) => c.flatMap((e) => (e.heads ? e.heads.map((h) => h.y) : []));
 		const gap = prev ? col[0].x - Math.max(...prev.map((e) => e.x)) : Infinity;
+		// écart toléré : une tête ; davantage si un point ou une tête large (blanche, ronde) les sépare
+		const wide = prev && prev.some((e) => !e.rest && (e.dots || e.dur >= 2));
 		const second = prev && ys(col).some((y) => ys(prev).some((z) => Math.abs(y - z) <= 0.6 * sp));
 		if (
 			prev &&
 			col.every((e) => !e.rest) &&
-			((second && gap < 2.4 * sp && ![...dirs(col)].some((d) => dirs(prev).has(d))) || (gap < 0.9 * sp && Math.min(...col.map((e) => e.dur), ...prev.map((e) => e.dur)) >= 1))
+			((second && gap < (wide ? 2.4 : 1.5) * sp && ![...dirs(col)].some((d) => dirs(prev).has(d))) || (gap < 0.9 * sp && Math.min(...col.map((e) => e.dur), ...prev.map((e) => e.dur)) >= 1))
 		) prev.push(...col);
 		else cols.push([...col]);
 	}
