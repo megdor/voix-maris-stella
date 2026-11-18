@@ -112,9 +112,10 @@ export async function extractPage(page, OPS) {
 			const uni = typeof g.unicode === "string" && g.unicode.length ? g.unicode.codePointAt(0) : null;
 			glyphs.push({ x, y, size, font: fname, code, uni, ch: g.unicode ?? "", adv: (g.width ?? 0) * fm[0] * size, italic: Boolean(font.italic), bold: Boolean(font.bold) });
 			if (!run) {
-				run = { x, y, size, font: fname, str: "" };
+				run = { x, y, size, font: fname, str: "", g0: glyphs.length - 1 };
 				texts.push(run);
 			}
+			run.g1 = glyphs.length;
 			run.str += g.unicode ?? "";
 			run.x1 = x + (g.width ?? 0) * fm[0] * size;
 			const w0 = (g.width ?? 0) * fm[0];

@@ -268,6 +268,67 @@ function keyAlter(fifths, step) {
 
 
 /** Les caractères d'un même mot, écrits un à un, réunis ; une espace sépare les mots. */
+/**
+ * Un mot écrit d'un seul bloc mais dont les syllabes sont écartées (sous les notes) :
+ * on le recoupe là où un blanc visible sépare deux lettres, d'après la position de chaque lettre.
+ */
+function splitRuns(runs, glyphs) {
+	return runs.flatMap((r) => {
+		if (r.g0 === undefined || r.g1 - r.g0 < 2) return [r];
+		const gs = glyphs.slice(r.g0, r.g1);
+		const out = [];
+		let cur = null;
+		for (const g of gs) {
+			if (cur && g.x - cur.x1 <= 0.25 * r.size && g.x >= cur.x - 0.5) {
+				cur.str += g.ch;
+				cur.x1 = Math.max(cur.x1, g.x + g.adv);
+			} else {
+				if (cur) out.push(cur);
+				cur = { ...r, str: g.ch, x: g.x, x1: g.x + g.adv };
+			}
+		}
+		if (cur) out.push(cur);
+		return out;
+	});
+}
+
+/** Tirets entre syllabes (écrits à part) : marque début, milieu et fin de mot. */
+function markHyphens(texts, segs = []) {
+	const flat = segs.filter((g) => Math.abs(g.y1 - g.y0) < 0.2 && Math.abs(g.x1 - g.x0) > 0.5);
+	const lines = new Map();
+	for (const t of texts) {
+		const k = Math.round(t.y * 2);
+		const key = [...lines.keys()].find((q) => Math.abs(q - k) <= 1) ?? k;
+		if (!lines.has(key)) lines.set(key, []);
+		lines.get(key).push(t);
+	}
+	const isHy = (t) => /^[-–]+$/.test(t.str);
+	for (const line of lines.values()) {
+		line.sort((a, b) => a.x - b.x);
+		for (let i = 0; i < line.length; i++) {
+			const t = line[i];
+			if (isHy(t) || !/\p{L}/u.test(t.str)) continue;
+			const next = line[i + 1];
+			const prev = line[i - 1];
+			if (/[-–]$/.test(t.str) || (next && isHy(next) && next.x - t.x1 < 4 * t.size)) t.hypAfter = true;
+			// tiret dessiné en trait (MuseScore) entre cette syllabe et la suivante
+			if (!t.hypAfter && next && /\p{L}/u.test(next.str)) {
+				const dash = flat.some((g) => {
+					const a = Math.min(g.x0, g.x1);
+					const b = Math.max(g.x0, g.x1);
+					return a >= t.x1 - 0.5 && b <= next.x + 0.5 && b - a < 1.2 * t.size && g.y0 < t.y - 0.1 * t.size && g.y0 > t.y - 0.6 * t.size;
+				});
+				if (dash) {
+					t.hypAfter = true;
+					next.hypBefore = true;
+				}
+			}
+			if (prev && (isHy(prev) && t.x - prev.x1 < 4 * t.size || prev.hypAfter)) t.hypBefore = true;
+		}
+	}
+	return texts;
+}
+
 function mergeTexts(runs) {
 	const rs = [...runs].sort((a, b) => a.y - b.y || a.x - b.x);
 	const out = [];
@@ -364,7 +425,7 @@ export function readPage(raw, state = { keys: [], times: null }) {
 	const V = verticals(raw, sp);
 	const systems = findSystems(staves, V, raw);
 	const out = [];
-	const texts = mergeTexts(raw.texts.filter((t) => !familyOf(t.font)));
+	const texts = markHyphens(mergeTexts(splitRuns(raw.texts.filter((t) => !familyOf(t.font)), raw.glyphs)), raw.segs);
 
 	systems.forEach((sys, si) => {
 		const top = sys[0].top - 8 * sp;
@@ -1095,7 +1156,7 @@ export function systemTrees(page, ctx) {
 										l.used = true;
 										const ly = nt.sub("lyric", null, { number: lines.indexOf(Math.round(l.y)) + 1 });
 										const s = l.str.replace(/[-–]$/, "");
-										ly.sub("syllabic", /[-–]$/.test(l.str) ? "begin" : "single");
+										ly.sub("syllabic", l.hypAfter ? (l.hypBefore ? "middle" : "begin") : l.hypBefore ? "end" : "single");
 										ly.sub("text", s);
 									});
 								}
