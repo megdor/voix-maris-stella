@@ -455,13 +455,13 @@ export function readPage(raw, state = { keys: [], times: null }) {
 		// --- hampes, ligatures, crochets : les accords
 		const beams = [];
 		for (const f of raw.fills) {
-			if (f.curved || f.stroked || !inSys((f.y0 + f.y1) / 2)) continue;
+			if (f.curved || f.stroked || f.pts.length >= 12 || !inSys((f.y0 + f.y1) / 2)) continue;
 			if (f.x1 - f.x0 < 0.6 * sp) continue;
 			const mid = spanAt(f.pts, (f.x0 + f.x1) / 2);
 			if (!mid) continue;
 			const th = mid[1] - mid[0];
 			// Encore double chaque morceau de liaison d'un polygone droit : pas une ligature
-			const twin = raw.fills.some((c) => c.curved && Math.abs(c.x0 - f.x0) < 0.6 && Math.abs(c.x1 - f.x1) < 0.6 && Math.abs(c.y0 - f.y0) < 0.8 && Math.abs(c.y1 - f.y1) < 0.8);
+			const twin = raw.fills.some((c) => c.curved && Math.abs(c.x0 - f.x0) < 0.25 * sp && Math.abs(c.x1 - f.x1) < 0.25 * sp && Math.abs(c.y0 - f.y0) < 0.25 * sp && Math.abs(c.y1 - f.y1) < 0.25 * sp);
 			if (th > 0.25 * sp && th < 0.9 * sp && !twin) beams.push(f);
 		}
 		for (const s of raw.segs) {
@@ -580,12 +580,17 @@ export function readPage(raw, state = { keys: [], times: null }) {
 				const ssp = sys[ch.k].sp; // l'interligne de cette portée (orgue plus grand que le chœur…)
 				if (d.x <= right - 0.1 * ssp || d.x >= right + 2.2 * ssp) continue;
 				const dy = Math.min(...ch.heads.map((h) => Math.abs(d.y - h.y)));
-				if (dy < 0.65 * ssp) cand.push({ ch, dy });
+				// tête sur une ligne : son point est dans l'interligne voisin
+				const dyl = Math.min(...ch.heads.map((h) => (h.pos % 2 === 0 ? Math.abs(Math.abs(d.y - h.y) - 0.5 * ssp) : Math.abs(d.y - h.y))));
+				if (dy < 0.65 * ssp) cand.push({ ch, dy: Math.min(dy, dyl), right });
 			}
 			if (!cand.length) continue;
 			const bd = Math.min(...cand.map((c) => c.dy));
-			// à égalité (tête partagée par deux voix) : le point vaut pour les deux
-			const near = cand.filter((c) => c.dy <= bd + 0.1 * sp);
+			// à égalité (tête partagée par deux voix) : le point vaut pour les deux,
+			// sauf si l'une des têtes est décalée (seconde) : le point suit la plus à droite
+			let near = cand.filter((c) => c.dy <= bd + 0.1 * sp);
+			const rmax = Math.max(...near.map((c) => c.right));
+			near = near.filter((c) => c.right >= rmax - 0.3 * sp);
 			for (const { ch } of near) {
 				if (!dotCols.has(ch)) dotCols.set(ch, []);
 				dotCols.get(ch).push(d.x);
@@ -837,12 +842,12 @@ function voicesOf(evs, sp) {
 		const prev = cols[cols.length - 1];
 		const dirs = (c) => new Set(c.filter((e) => !e.rest).map((e) => e.up));
 		const ys = (c) => c.flatMap((e) => (e.heads ? e.heads.map((h) => h.y) : []));
+		const gap = prev ? col[0].x - Math.max(...prev.map((e) => e.x)) : Infinity;
+		const second = prev && ys(col).some((y) => ys(prev).some((z) => Math.abs(y - z) <= 0.6 * sp));
 		if (
 			prev &&
-			col[0].x - Math.max(...prev.map((e) => e.x)) < 2.4 * sp &&
 			col.every((e) => !e.rest) &&
-			![...dirs(col)].some((d) => dirs(prev).has(d)) &&
-			ys(col).some((y) => ys(prev).some((z) => Math.abs(y - z) <= 0.55 * sp))
+			((second && gap < 2.4 * sp && ![...dirs(col)].some((d) => dirs(prev).has(d))) || (gap < 0.9 * sp && Math.min(...col.map((e) => e.dur), ...prev.map((e) => e.dur)) >= 1))
 		) prev.push(...col);
 		else cols.push([...col]);
 	}
@@ -877,6 +882,44 @@ function voicesOf(evs, sp) {
 			v.evs.push(e);
 			v.end = T + e.dur;
 			v.dir = rank(e);
+			usedHere.add(v);
+		}
+		// deux voix sur une seule hampe (accord) : la voix restée sans note prend sa tête
+		const lastY = (v) => {
+			for (let i = v.evs.length - 1; i >= 0; i--) {
+				const e = v.evs[i];
+				if (e.heads?.length) return e.heads.reduce((s, h) => s + h.y, 0) / e.heads.length;
+			}
+			return null;
+		};
+		for (const v of voices) {
+			if (usedHere.has(v) || Math.abs(v.end - T) > 1e-6) continue;
+			const vy = lastY(v);
+			if (vy === null) continue;
+			let owner = voices.find((w) => usedHere.has(w) && w.evs.length && w.evs[w.evs.length - 1].heads?.length > 1 && col.includes(w.evs[w.evs.length - 1]));
+			if (!owner) {
+				// une seule note pour les deux voix qui se rejoignent (unisson implicite)
+				const solo = col.length === 1 && !col[0].rest ? col[0] : null;
+				const last = v.evs[v.evs.length - 1];
+				owner = solo && last?.heads ? voices.find((w) => w !== v && w.evs[w.evs.length - 1] === solo) : null;
+				if (owner) {
+					v.evs.push({ ...solo, split: true });
+					v.end = T + solo.dur;
+					usedHere.add(v);
+				}
+				continue;
+			}
+			const ch = owner.evs[owner.evs.length - 1];
+			const oy = lastY({ evs: owner.evs.slice(0, -1) });
+			if (oy === null || Math.abs(oy - vy) < 1e-6) continue;
+			const hs = [...ch.heads].sort((a, b) => a.y - b.y);
+			const below = vy > oy;
+			const mine = below ? hs.slice(-1) : hs.slice(0, 1);
+			const keep = below ? hs.slice(0, -1) : hs.slice(1);
+			owner.evs[owner.evs.length - 1] = { ...ch, heads: keep };
+			v.evs.push({ ...ch, heads: mine, split: true });
+			v.end = T + ch.dur;
+			v.dir = below ? 2 : 0;
 			usedHere.add(v);
 		}
 		// un silence écrit une fois pour deux voix : rendu à chacune
@@ -970,7 +1013,7 @@ export function systemTrees(page, ctx) {
 				// notes
 				const st = sys.staves[k];
 				const measLen = c.time ? (c.time.beats * 4) / c.time.type : null;
-				const voices = voicesOf(cell.evs, sp);
+				const voices = voicesOf(cell.evs, st.sp ?? sp);
 				const carried = new Map(); // altérations accidentelles de la mesure
 				const accidentals = [...cell.evs.filter((e) => !e.rest).flatMap((e) => e.heads)].sort((a, b) => a.x - b.x);
 				for (const h of accidentals) {
