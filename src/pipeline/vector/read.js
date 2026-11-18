@@ -970,7 +970,17 @@ export function readPage(raw, state = { keys: [], times: null }) {
 			}
 			tempos.push({ x: eq.x, bpm: Math.round(bpm * unit) });
 		}
-		out.push({ staves: sys, bars, reps, measures, chords, rests, braces: braces.filter((b) => b.y1 - b.y0 > 6 * sp), sung, tempos });
+		// numéro de mesure imprimé au-dessus de la 1re mesure du système (pour numéroter comme la partition)
+		const mnum = (() => {
+			const top = sys[0].top;
+			const c = texts
+				.filter((t) => /^\d{1,3}$/.test(t.str.trim()) && t.size < 3 * sp && t.y < top - 0.2 * sp && t.y > top - 4.5 * sp && t.x > bars[0] - 2 * sp && t.x < bars[1] - 0.5 * sp)
+				.filter((t) => !texts.some((u) => u !== t && /[=♩]/.test(u.str) && Math.abs(u.y - t.y) < sp && Math.abs(u.x - t.x) < 4 * sp))
+				.filter((t) => !voltaSegs.some((g) => Math.abs(Math.min(g.x0, g.x1) - t.x) < 2 * sp && t.y > g.y0 && t.y < g.y0 + 3.5 * sp))
+				.sort((a, b) => a.x - b.x);
+			return c.length ? Number(c[0].str.trim()) : null;
+		})();
+		out.push({ staves: sys, bars, reps, mnum, measures, chords, rests, braces: braces.filter((b) => b.y1 - b.y0 > 6 * sp), sung, tempos });
 	});
 	report.notes = out.reduce((a, s) => a + s.chords.reduce((b, c) => b + c.heads.length, 0), 0);
 	report.rests = out.reduce((a, s) => a + s.rests.length, 0);

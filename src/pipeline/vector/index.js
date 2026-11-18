@@ -28,6 +28,7 @@ export async function readVectorPdf(doc, OPS, { onProgress } = {}) {
 	const report = { pages: [], unknown: new Map(), notes: 0 };
 	const trees = [];
 	const pageStart = [];
+	const sysNum = [];
 	const ctx = { staff: [], time: null };
 	for (let p = 1; p <= doc.numPages; p++) {
 		onProgress?.(p, doc.numPages);
@@ -40,6 +41,7 @@ export async function readVectorPdf(doc, OPS, { onProgress } = {}) {
 		const ts = systemTrees(page, ctx);
 		ts.forEach((t, i) => {
 			pageStart.push(i === 0);
+			sysNum.push(page.systems[i]?.mnum ?? null);
 			trees.push(t.tree);
 			report.where = report.where ?? [];
 			for (let m = 0; m < t.measures; m++) report.where.push(`p${p} s${i} m${m}`);
@@ -59,6 +61,7 @@ export async function readVectorPdf(doc, OPS, { onProgress } = {}) {
 			}
 		}
 	}
+	renumber(root, sysNum);
 	// contrôle : chaque voix de chaque mesure fait-elle la durée de la mesure ?
 	const q = durations(root);
 	report.measures = q.measures;
@@ -106,4 +109,39 @@ function durations(root) {
 		});
 	}
 	return { total, bad, measures };
+}
+
+/**
+ * Numéros de mesure comme sur la partition : le numéro imprimé en tête de chaque système donne un
+ * décalage ; on garde celui sur lequel la plupart des systèmes s'accordent (une levée devient la mesure 0).
+ */
+function renumber(root, sysNum) {
+	const parts = kids(root, "part");
+	if (!parts.length) return;
+	const ms = kids(parts[0], "measure");
+	const starts = [];
+	ms.forEach((m, i) => {
+		if (i === 0 || kids(m, "print").length) starts.push(i);
+	});
+	const votes = new Map();
+	let seen = 0;
+	starts.forEach((i, j) => {
+		const n = sysNum[j];
+		if (n == null) return;
+		seen++;
+		const d = n - (i + 1);
+		votes.set(d, (votes.get(d) ?? 0) + 1);
+	});
+	const best = [...votes.entries()].sort((a, b) => b[1] - a[1])[0];
+	if (!best || best[1] < 2 || best[1] < 0.6 * seen || best[0] === 0) return;
+	const d = best[0];
+	for (const part of parts) {
+		kids(part, "measure").forEach((m, i) => {
+			const n = i + 1 + d;
+			const attrs = (m.attrs ?? []).filter(([k]) => k !== "number" && k !== "implicit");
+			attrs.unshift(["number", String(Math.max(0, n))]);
+			if (n <= 0) attrs.push(["implicit", "yes"]);
+			m.attrs = attrs;
+		});
+	}
 }
