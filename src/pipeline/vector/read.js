@@ -882,8 +882,31 @@ export function readPage(raw, state = { keys: [], times: null }) {
 			}
 		}
 		// liaisons de prolongation
-		for (const f of raw.fills) {
-			if (f.used || !f.curved || !inSys((f.y0 + f.y1) / 2)) continue;
+		// une courbe, ou une courbe aplatie en polygone de nombreux points ; les morceaux bout à bout
+		// (Encore dessine une liaison en plusieurs tronçons, chacun en double) sont réunis
+		const tiePieces = raw.fills
+			.filter((f) => !f.used && (f.curved || f.pts.length >= 12) && inSys((f.y0 + f.y1) / 2))
+			.map((f) => ({ x0: f.x0, x1: f.x1, y0: f.y0, y1: f.y1 }))
+			.sort((a, b) => a.x0 - b.x0);
+		const curves = [];
+		for (const f of tiePieces) {
+			const dup = curves.find((c) => Math.abs(c.x0 - f.x0) < 0.3 * sp && Math.abs(c.x1 - f.x1) < 0.3 * sp && Math.abs(c.y0 - f.y0) < 0.4 * sp);
+			if (dup) continue;
+			// pas à travers une note : deux liaisons qui s'enchaînent restent deux liaisons
+			const prev = curves.find(
+				(c) =>
+					Math.abs(c.x1 - f.x0) < 0.3 * sp &&
+					Math.abs(c.y0 - f.y0) < 0.6 * sp &&
+					Math.abs(c.y1 - f.y1) < 0.6 * sp &&
+					!sHeads.some((h) => h.x < f.x0 + 0.5 * sp && h.x + h.w > f.x0 - 1.5 * sp && Math.abs(h.y - (f.y0 + f.y1) / 2) < 1.5 * sp),
+			);
+			if (prev) {
+				prev.x1 = Math.max(prev.x1, f.x1);
+				prev.y0 = Math.min(prev.y0, f.y0);
+				prev.y1 = Math.max(prev.y1, f.y1);
+			} else curves.push({ ...f });
+		}
+		for (const f of curves) {
 			const w = f.x1 - f.x0;
 			if (w < 0.8 * sp || f.y1 - f.y0 > 2 * sp) continue;
 			const cy = (f.y0 + f.y1) / 2;
