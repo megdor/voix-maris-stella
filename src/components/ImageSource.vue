@@ -6,7 +6,7 @@
 // one (else a frame of the preview).
 import { Capacitor } from "@capacitor/core";
 import { onBeforeUnmount, ref } from "vue";
-import { imagesFromPhotos, takeCameraPhoto, titleFromFileName } from "../photos.js";
+import { imagesFromPhotos, isPdf, readExact, takeCameraPhoto, titleFromFileName } from "../photos.js";
 import { imageFromSource } from "../pipeline/index.js";
 import { useOmrState } from "../useOmr.js";
 
@@ -39,8 +39,26 @@ async function addPhotos(photos) {
 			omr.title = t;
 		}
 	}
+	// un seul PDF, né numérique : lu directement dans le fichier, puis le lecteur de voix
+	if (photos.length === 1 && isPdf(photos[0]) && !omr.pages?.length) {
+		exacting.value = true;
+		const r = await readExact(photos[0]);
+		exacting.value = false;
+		if (r) {
+			try {
+				localStorage.setItem("voix-musicxml", r.musicXml);
+				localStorage.setItem("voix-titre", String(omr.title || "").trim());
+				localStorage.setItem("voix-source", "exacte");
+				window.location.href = `${import.meta.env.BASE_URL ?? "/"}voix.html#depuis-lecture`;
+				return;
+			} catch {
+				// stockage plein : lecture habituelle
+			}
+		}
+	}
 	omr.addImages(await imagesFromPhotos(photos));
 }
+const exacting = ref(false); // lecture directe d'un PDF en cours
 
 const native = Capacitor.isNativePlatform();
 const taking = ref(false); // the phone's camera app is open
@@ -147,6 +165,7 @@ onBeforeUnmount(stopCamera);
 			Un PDF, ou une photo par page. Pour une photo : page à plat, bien éclairée, entière dans
 			le cadre — l'idéal est le scanner de documents du téléphone.
 		</p>
+		<p v-if="exacting" class="hint">Lecture du fichier PDF…</p>
 		<video v-if="cameraActive" ref="videoEl" autoplay playsinline></video>
 	</div>
 </template>
