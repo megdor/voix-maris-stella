@@ -1,7 +1,7 @@
 // Ce que signifie chaque caractère d'une police musicale, selon sa famille :
 //  - SMuFL (Bravura, Leland, Petaluma, Finale Maestro récent, MuseScore 3 et 4) : codes Unicode standard ;
 //  - MuseScore 2 (police « MScore ») : ses propres codes, relevés sur nos PDF ;
-//  - Sonata et compatibles (Opus de Sibelius, Maestro de Finale, Anastasia, Aloisen, Petrucci…) :
+//  - Sonata et compatibles (Opus de Sibelius, Maestro de Finale, Anastasia d'Encore, Petrucci…) :
 //    un caractère par touche, code d'origine (0 à 255) ou son équivalent Unicode Mac Roman.
 // Un symbole est un nom court : head1/head2/head4 (tête noire, blanche, ronde), clefG, clefG8, clefF,
 // clefC, flat, sharp, natural, dflat, dsharp, rest1 … rest32, flagU8, flagD8, flagU16, flagD16,
@@ -45,6 +45,7 @@ const SONATA = {
 	0x30: "t0", 0x31: "t1", 0x32: "t2", 0x33: "t3", 0x34: "t4", 0x35: "t5", 0x36: "t6", 0x37: "t7", 0x38: "t8", 0x39: "t9",
 	0x63: "tC", 0x43: "tCut",
 	0x3d: "staff5", 0x5f: "ledger", 0x55: "fermata", 0x75: "fermata", 0x7b: "brace", 0xa7: "brace", 0xa3: "tu3", // « 3 » de triolet (Sonata)
+	0xa5: "oct8", 0xdc: "oct8", // petit « 8 » sous la clé (clé de sol pour ténors)
 };
 
 // Unicode -> octet Mac Roman (les polices Sonata déclarent souvent leurs caractères ainsi)
@@ -60,7 +61,7 @@ export function familyOf(fontName) {
 	if (/Text/i.test(n) && !/Engraver/i.test(n)) return null; // polices de texte musical (tempo, nuances)
 	if (/Bravura|Leland|Petaluma|Sebastian|Gootville|MuseJazz|Finale ?(Maestro|Ash|Broadway|Jazz|Engraver|Legacy)|Golden|Ekmelos/i.test(n)) return "smufl";
 	if (/MScore|Emmentaler|Gonville/i.test(n)) return "mscore";
-	if (/Opus|Maestro|Anastasia|Aloisen|Petrucci|Sonata|Engraver|Jazz|November|Kousbouk|Broadway|Reprise|Tamburo|Sibelius|Helsinki|Inkpen|Norfolk/i.test(n)) return "sonata";
+	if (/Opus|Maestro|Anastasia|Petrucci|Sonata|Engraver|Jazz|November|Kousbouk|Broadway|Reprise|Tamburo|Sibelius|Helsinki|Inkpen|Norfolk/i.test(n)) return "sonata";
 	return null;
 }
 

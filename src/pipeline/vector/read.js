@@ -394,7 +394,12 @@ export function readPage(raw, state = { keys: [], times: null }) {
 		// --- clés, armures, chiffrages par portée
 		const staffInfo = sys.map((st, k) => {
 			const mine = sSyms.filter((s) => staffOf(s.y) === k);
-			const clefs = mine.filter((s) => s.s in CLEF_BASE).sort((a, b) => a.x - b.x);
+			const clefs = mine.filter((s) => s.s in CLEF_BASE).sort((a, b) => a.x - b.x).map((c) => ({ ...c }));
+			// un petit « 8 » sous une clé de sol : clé de ténor (une octave plus bas)
+			for (const c of clefs) {
+				if (c.s !== "clefG") continue;
+				if (mine.some((o) => o.s === "oct8" && Math.abs(o.x - c.x) < 2 * sp && o.y > sys[k].bot && o.y < sys[k].bot + 4 * sp)) c.s = "clefG8";
+			}
 			const accs = mine.filter((s) => s.s in ACC);
 			// accidents attachés à une note : une tête à droite, à la même hauteur
 			const attached = new Set();
