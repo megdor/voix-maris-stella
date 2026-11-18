@@ -4,7 +4,7 @@
 // joints par join.js comme les pages lues par copista.
 
 import { El } from "../copisteria/xml.js";
-import { familyOf, mscoreUsesSmufl, symbolOf } from "./fonts.js";
+import { familiesOf, mscoreUsesSmufl, symbolOf } from "./fonts.js";
 
 const DIV = 48; // divisions par noire : croches de triolet et doubles croches exactes
 
@@ -313,6 +313,8 @@ export function readPage(raw, state = { keys: [], times: null }) {
 	const sp = median(staves.map((s) => s.sp));
 	// glyphes musicaux
 	const mscoreSmufl = mscoreUsesSmufl(raw.glyphs);
+	const fams = familiesOf(raw.glyphs);
+	const familyOf = (f) => (fams.has(f) ? fams.get(f) : null);
 	const syms = [];
 	for (const g of raw.glyphs) {
 		const fam = familyOf(g.font);
@@ -324,6 +326,35 @@ export function readPage(raw, state = { keys: [], times: null }) {
 			continue;
 		}
 		syms.push({ s, x: g.x, y: g.y, size: g.size, adv: g.adv || 1.2 * sp, font: g.font });
+	}
+	// clés d'une police inconnue (O salutaris de Rossini : « p », « P », « l ») : un caractère d'une
+	// petite police, au début de chaque portée, posé sur la ligne de sol, d'ut ou de fa
+	{
+		const codes = new Map();
+		for (const g of raw.glyphs) {
+			if (familyOf(g.font)) continue;
+			if (!codes.has(g.font)) codes.set(g.font, new Set());
+			codes.get(g.font).add(g.uni ?? g.code);
+		}
+		const found = [];
+		for (const g of raw.glyphs) {
+			if (familyOf(g.font) || (codes.get(g.font)?.size ?? 99) > 6) continue;
+			for (const st of staves) {
+				if (g.x < st.x0 - 0.5 * st.sp || g.x > st.x0 + 4 * st.sp) continue;
+				const line = (st.bot - g.y) / st.sp;
+				if (g.y < st.top - 2 * st.sp || g.y > st.bot + 2 * st.sp) continue;
+				if (Math.abs(line - 1) < 0.15) found.push({ g, kind: "G" });
+				else if (Math.abs(line - 3) < 0.15) found.push({ g, kind: "F" });
+				else if (Math.abs(line - 2) < 0.15) found.push({ g, kind: "C" });
+			}
+		}
+		const gCodes = new Map();
+		for (const f of found.filter((f) => f.kind === "G")) gCodes.set(f.g.uni, (gCodes.get(f.g.uni) ?? 0) + 1);
+		const gMain = [...gCodes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+		for (const { g, kind } of found) {
+			const s = kind === "F" ? "clefF" : kind === "C" ? "clefC" : g.uni === gMain ? "clefG" : "clefG8";
+			syms.push({ s, x: g.x, y: g.y, size: g.size, adv: g.adv, font: g.font });
+		}
 	}
 	// têtes de notes (les petites : notes d'agrément, ignorées)
 	const bigHead = median(syms.filter((s) => s.s in HEADS).map((s) => s.size)) ?? 4 * sp;
@@ -392,7 +423,8 @@ export function readPage(raw, state = { keys: [], times: null }) {
 				return { x: g.x, fifths: s > f ? s : -f };
 			});
 			// chiffrages
-			const digits = mine.filter((s) => /^t\d$/.test(s.s) || s.s === "tC" || s.s === "tCut");
+			// chiffres de mesure : dans la portée, en grand (un petit « 3 » au-dessus d'une ligature : triolet)
+			const digits = mine.filter((s) => (/^t\d$/.test(s.s) || s.s === "tC" || s.s === "tCut") && s.y > sys[k].top - 0.6 * sp && s.y < sys[k].bot + 3 * sp && s.size > 0.75 * bigHead);
 			const times = [];
 			for (const c of cluster(digits.map((d) => d.x), 1.5 * sp)) {
 				const ds = digits.filter((d) => c.includes(d.x));
@@ -412,7 +444,7 @@ export function readPage(raw, state = { keys: [], times: null }) {
 		for (const h of sHeads) {
 			const cl = staffInfo[h.k].clefs.filter((c) => c.x < h.x).pop() ?? staffInfo[h.k].clefs[0];
 			h.clef = cl?.s ?? null;
-			h.pos = Math.round((sys[h.k].bot - h.y) / (sp / 2));
+			h.pos = Math.round((sys[h.k].bot - h.y) / (sys[h.k].sp / 2));
 		}
 
 		// --- hampes, ligatures, crochets : les accords
@@ -423,7 +455,9 @@ export function readPage(raw, state = { keys: [], times: null }) {
 			const mid = spanAt(f.pts, (f.x0 + f.x1) / 2);
 			if (!mid) continue;
 			const th = mid[1] - mid[0];
-			if (th > 0.25 * sp && th < 0.9 * sp) beams.push(f);
+			// Encore double chaque morceau de liaison d'un polygone droit : pas une ligature
+			const twin = raw.fills.some((c) => c.curved && Math.abs(c.x0 - f.x0) < 0.6 && Math.abs(c.x1 - f.x1) < 0.6 && Math.abs(c.y0 - f.y0) < 0.8 && Math.abs(c.y1 - f.y1) < 0.8);
+			if (th > 0.25 * sp && th < 0.9 * sp && !twin) beams.push(f);
 		}
 		for (const s of raw.segs) {
 			if (s.w > 0.3 * sp && s.w < 0.9 * sp && Math.abs(s.x1 - s.x0) > 0.6 * sp && inSys((s.y0 + s.y1) / 2)) {
@@ -487,6 +521,7 @@ export function readPage(raw, state = { keys: [], times: null }) {
 			chords.push({
 				x: (main.length ? main : on)[0].x,
 				heads: on,
+				main,
 				up,
 				stem: st,
 				beams: beamsN,
@@ -497,21 +532,64 @@ export function readPage(raw, state = { keys: [], times: null }) {
 		// rondes et brèves (sans hampe), et têtes restées seules
 		const taken = new Set(chords.flatMap((c) => c.heads.map((h) => h.id)));
 		const lone = sHeads.filter((h) => !taken.has(h.id));
+		const loneChords = [];
 		for (const c of cluster(lone.map((h) => h.x), 0.5 * sp)) {
 			const hs = lone.filter((h) => c.includes(h.x));
 			for (const k of new Set(hs.map((h) => h.k))) {
 				const mine = hs.filter((h) => h.k === k);
 				const kind = mine[0].kind;
-				chords.push({ x: mine[0].x, heads: mine, up: null, beams: 0, dur: HEADS[kind] ?? 1, k, lone: kind === "head1" || kind === "head2" });
+				// une seconde : la tête décalée à côté de l'autre appartient au même accord
+				const prev = loneChords.find((o) => o.k === k && o.heads[0].kind === kind && mine[0].x - o.x > 0 && mine[0].x - o.x < 2.3 * sp && o.heads.some((a) => mine.some((b) => Math.abs(a.y - b.y) <= 0.55 * sp)));
+				if (prev) prev.heads.push(...mine);
+				else loneChords.push({ x: mine[0].x, heads: mine, up: null, beams: 0, dur: HEADS[kind] ?? 1, k, lone: kind === "head1" || kind === "head2" });
 			}
 		}
-		// points de prolongation
-		const dots = sSyms.filter((s) => s.s === "dot");
+		chords.push(...loneChords);
+		// têtes partagées entre deux hampes (voix à la seconde ou à l'unisson) : une tête blanche ne va
+		// pas avec des noires ; elle reste à l'accord dont toutes les têtes sont de son espèce
 		for (const ch of chords) {
-			const right = Math.max(...ch.heads.map((h) => h.x + h.w));
-			const ds = dots.filter((d) => d.x > right - 0.1 * sp && d.x < right + 2.2 * sp && ch.heads.some((h) => Math.abs(d.y - h.y) < 0.6 * sp));
-			const n = cluster(ds.map((d) => d.x), 0.3 * sp).length;
-			if (n) ch.dur *= n === 1 ? 1.5 : 1.75;
+			if (!ch.stem) continue;
+			const kinds = new Set(ch.heads.map((h) => (h.kind === "head2" ? 2 : 1)));
+			if (kinds.size < 2) continue;
+			const other = (h) => chords.some((o) => o !== ch && o.heads.includes(h) && o.heads.every((x) => (x.kind === "head2") === (h.kind === "head2")));
+			let keep = ch.heads.filter((h) => !other(h));
+			// sinon : l'espèce des têtes du côté normal de la hampe
+			if (keep.length === ch.heads.length && ch.main?.length) {
+				const k0 = ch.main[0].kind === "head2";
+				if (ch.main.every((h) => (h.kind === "head2") === k0)) keep = ch.heads.filter((h) => (h.kind === "head2") === k0);
+			}
+			if (keep.length && keep.length < ch.heads.length) {
+				ch.heads = keep;
+				const half = keep.every((h) => h.kind === "head2");
+				ch.dur = half ? 2 : 1 / 2 ** ch.beams;
+			}
+		}
+		// points de prolongation : chaque point à l'accord dont une tête est la plus proche
+		const dots = sSyms.filter((s) => s.s === "dot");
+		for (const ch of chords) ch.dots = 0;
+		const dotCols = new Map();
+		for (const d of dots) {
+			const cand = [];
+			for (const ch of chords) {
+				const right = Math.max(...ch.heads.map((h) => h.x + h.w));
+				const ssp = sys[ch.k].sp; // l'interligne de cette portée (orgue plus grand que le chœur…)
+				if (d.x <= right - 0.1 * ssp || d.x >= right + 2.2 * ssp) continue;
+				const dy = Math.min(...ch.heads.map((h) => Math.abs(d.y - h.y)));
+				if (dy < 0.65 * ssp) cand.push({ ch, dy });
+			}
+			if (!cand.length) continue;
+			const bd = Math.min(...cand.map((c) => c.dy));
+			// à égalité (tête partagée par deux voix) : le point vaut pour les deux
+			const near = cand.filter((c) => c.dy <= bd + 0.1 * sp);
+			for (const { ch } of near) {
+				if (!dotCols.has(ch)) dotCols.set(ch, []);
+				dotCols.get(ch).push(d.x);
+				if (near.length > 1) ch.sharedDot = true;
+			}
+		}
+		for (const [ch, xs] of dotCols) {
+			const n = Math.min(2, cluster(xs, 0.3 * sp).length);
+			ch.dur *= n === 1 ? 1.5 : 1.75;
 			ch.dots = n;
 		}
 		// silences
@@ -532,6 +610,7 @@ export function readPage(raw, state = { keys: [], times: null }) {
 		// triolets : un « 3 » (glyphe de n-olet ou texte) au-dessus ou au-dessous d'un groupe lié
 		const threes = [
 			...sSyms.filter((s) => s.s === "tu3"),
+			...sSyms.filter((s) => s.s === "t3" && s.size < 0.75 * bigHead),
 			...texts.filter((t) => t.str.trim() === "3" && inSys(t.y)).map((t) => ({ x: t.x, y: t.y })),
 		];
 		for (const t of threes) {
@@ -567,6 +646,14 @@ export function readPage(raw, state = { keys: [], times: null }) {
 					const end = c.up ? c.stem.y0 : c.stem.y1;
 					return end >= sp_[0] - 0.6 * sp && end <= sp_[1] + 0.6 * sp;
 				});
+				// un triolet qui commence ou finit par un silence : deux notes liées et ce silence
+				if (group.length === 2) {
+					const xs = group.map((c) => c.x).sort((a, b) => a - b);
+					const r = rests
+						.filter((r) => r.k === group[0].k && !r.tuplet && ((r.x < xs[0] && xs[0] - r.x < 3 * sp) || (r.x > xs[1] && r.x - xs[1] < 3 * sp)))
+						.sort((a, b) => Math.abs(a.x - t.x) - Math.abs(b.x - t.x))[0];
+					if (r) group.push(r);
+				}
 			}
 			else {
 				// triolet sans ligature : la note sous le « 3 » et ses deux voisines de la même portée
@@ -586,6 +673,42 @@ export function readPage(raw, state = { keys: [], times: null }) {
 				}
 			}
 			for (const c of group) if (!c.tuplet) {
+				c.dur = (c.dur * 2) / 3;
+				c.tuplet = true;
+			}
+		}
+		// un point partagé ne va pas à une note de triolet (c'est celui de l'autre voix)
+		for (const c of chords) {
+			if (c.tuplet && c.sharedDot && c.dots === 1) {
+				c.dur /= 1.5;
+				c.dots = 0;
+			}
+		}
+		// triolets « simile » : après des triolets marqués, les groupes de croches suivants de même
+		// allure (trois croches liées, ou deux et un demi-soupir) sont des triolets sans le « 3 »
+		const onBeam = (b) =>
+			chords.filter((c) => {
+				if (!c.stem || c.stem.x < b.x0 - 0.3 * sp || c.stem.x > b.x1 + 0.3 * sp) return false;
+				const sp_ = spanAt(b.pts, Math.min(Math.max(c.stem.x, b.x0 + 0.01), b.x1 - 0.01));
+				if (!sp_) return false;
+				const end = c.up ? c.stem.y0 : c.stem.y1;
+				return end >= sp_[0] - 0.6 * sp && end <= sp_[1] + 0.6 * sp;
+			});
+		for (const b of beams) {
+			const g = onBeam(b);
+			if (!g.length || g.length > 3 || g.some((c) => c.tuplet || Math.abs(c.dur - 0.5) > 1e-6)) continue;
+			const k = g[0].k;
+			const up = g[0].up;
+			const marked = chords.some((c) => c.tuplet && c.k === k && c.up === up && Math.abs(c.dur - 1 / 3) < 1e-6);
+			if (!marked) continue;
+			let grp = g;
+			if (g.length === 2) {
+				const xs = g.map((c) => c.x).sort((a, z) => a - z);
+				const r = rests.find((r) => r.k === k && !r.tuplet && Math.abs(r.dur - 0.5) < 1e-6 && ((r.x < xs[0] && xs[0] - r.x < 3 * sp) || (r.x > xs[1] && r.x - xs[1] < 3 * sp)));
+				if (!r) continue;
+				grp = [...g, r];
+			}
+			for (const c of grp) {
 				c.dur = (c.dur * 2) / 3;
 				c.tuplet = true;
 			}
@@ -647,7 +770,34 @@ export function readPage(raw, state = { keys: [], times: null }) {
 		}
 		// un crochet de chœur n'est pas une accolade : les portées avec paroles restent séparées
 		const sung = sys.map((_, k) => lyr[k].length > 0);
-		out.push({ staves: sys, bars, measures, chords, rests, braces: braces.filter((b) => b.y1 - b.y0 > 6 * sp), sung });
+		// indications de tempo au-dessus du système : « ♩ = 120 »
+		const tempos = [];
+		for (const eq of raw.glyphs) {
+			if (eq.ch !== "=" || familyOf(eq.font)) continue;
+			if (!(eq.y < sys[0].top && eq.y > lim0 - 4 * sp)) continue;
+			const line = raw.glyphs.filter((g) => Math.abs(g.y - eq.y) < 0.4 * eq.size);
+			const num = line.filter((g) => g.x > eq.x && g.x < eq.x + 3.5 * eq.size && /\d/.test(g.ch) && !familyOf(g.font)).sort((a, b) => a.x - b.x);
+			let digits = "";
+			for (const g of num) {
+				if (digits && g.x - num[num.indexOf(g) - 1].x > eq.size) break;
+				digits += g.ch;
+			}
+			const bpm = Number(digits);
+			if (!(bpm >= 20 && bpm <= 300)) continue;
+			const left = line.filter((g) => g.x < eq.x && g.x > eq.x - 3 * eq.size).sort((a, b) => b.x - a.x);
+			let unit = 1;
+			for (const g of left) {
+				const u = g.uni;
+				if (u === 0xe1d3 || u === 0xe1d4 || u === 0xeca3 || u === 0xeca4 || g.ch === "h") unit = 2;
+				else if (u === 0xe1d7 || u === 0xe1d8 || u === 0xeca7 || u === 0xeca8 || g.ch === "e") unit = 0.5;
+				else if (u === 0xe1d5 || u === 0xe1d6 || u === 0xeca5 || u === 0xeca6 || g.ch === "q") unit = 1;
+				else continue;
+				if (left.some((d) => d.x > g.x && d.x < eq.x && (d.uni === 0xe1e7 || d.uni === 0xecb7 || d.ch === "."))) unit *= 1.5;
+				break;
+			}
+			tempos.push({ x: eq.x, bpm: Math.round(bpm * unit) });
+		}
+		out.push({ staves: sys, bars, measures, chords, rests, braces: braces.filter((b) => b.y1 - b.y0 > 6 * sp), sung, tempos });
 	});
 	report.notes = out.reduce((a, s) => a + s.chords.reduce((b, c) => b + c.heads.length, 0), 0);
 	report.rests = out.reduce((a, s) => a + s.rests.length, 0);
@@ -775,6 +925,16 @@ export function systemTrees(page, ctx) {
 			if (m === 0 && grp.length > 1) attrs.sub("staves", grp.length);
 			meas.children.push(attrs);
 			let cursor = 0;
+			if (gi === 0) {
+				const tp = (sys.tempos ?? []).find((t) => (m === 0 && t.x < sys.bars[1]) || (t.x >= sys.bars[m] && t.x < sys.bars[m + 1]));
+				if (tp) {
+					const dir = meas.sub("direction", null, { placement: "above" });
+					const met = dir.sub("direction-type").sub("metronome");
+					met.sub("beat-unit", "quarter");
+					met.sub("per-minute", tp.bpm);
+					dir.sub("sound", null, { tempo: tp.bpm });
+				}
+			}
 			grp.forEach((k, si) => {
 				const c = (ctx.staff[k] ??= { clef: null, fifths: 0, time: null });
 				const cell = ms[k];
@@ -810,7 +970,7 @@ export function systemTrees(page, ctx) {
 				const accidentals = [...cell.evs.filter((e) => !e.rest).flatMap((e) => e.heads)].sort((a, b) => a.x - b.x);
 				for (const h of accidentals) {
 					const base = CLEF_BASE[h.clef ?? c.clef ?? "clefG"];
-					const d = base + Math.round((st.bot - h.y) / (sp / 2));
+					const d = base + Math.round((st.bot - h.y) / (st.sp / 2));
 					h.diat = d;
 					const a = h.acc?.sort((p, q) => q.x - p.x)[0];
 					c.ties ??= new Map();

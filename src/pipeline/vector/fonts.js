@@ -44,7 +44,7 @@ const SONATA = {
 	0x2e: "dot", 0xaa: "dot", // point de prolongation (Opus Special)
 	0x30: "t0", 0x31: "t1", 0x32: "t2", 0x33: "t3", 0x34: "t4", 0x35: "t5", 0x36: "t6", 0x37: "t7", 0x38: "t8", 0x39: "t9",
 	0x63: "tC", 0x43: "tCut",
-	0x3d: "staff5", 0x5f: "ledger", 0x55: "fermata", 0x75: "fermata", 0x7b: "brace", 0xa7: "brace",
+	0x3d: "staff5", 0x5f: "ledger", 0x55: "fermata", 0x75: "fermata", 0x7b: "brace", 0xa7: "brace", 0xa3: "tu3", // « 3 » de triolet (Sonata)
 };
 
 // Unicode -> octet Mac Roman (les polices Sonata déclarent souvent leurs caractères ainsi)
@@ -60,7 +60,7 @@ export function familyOf(fontName) {
 	if (/Text/i.test(n) && !/Engraver/i.test(n)) return null; // polices de texte musical (tempo, nuances)
 	if (/Bravura|Leland|Petaluma|Sebastian|Gootville|MuseJazz|Finale ?(Maestro|Ash|Broadway|Jazz|Engraver|Legacy)|Golden|Ekmelos/i.test(n)) return "smufl";
 	if (/MScore|Emmentaler|Gonville/i.test(n)) return "mscore";
-	if (/Opus|Maestro|Anastasia|Aloisen|Petrucci|Sonata|Engraver|Jazz|November|Kousbouk|Broadway|Reprise|Tamburo|FPEF|Sibelius|Helsinki|Inkpen|Norfolk/i.test(n)) return "sonata";
+	if (/Opus|Maestro|Anastasia|Aloisen|Petrucci|Sonata|Engraver|Jazz|November|Kousbouk|Broadway|Reprise|Tamburo|Sibelius|Helsinki|Inkpen|Norfolk/i.test(n)) return "sonata";
 	return null;
 }
 
@@ -93,4 +93,34 @@ export function mscoreUsesSmufl(glyphs) {
 		if (g.uni === 0xe12d || g.uni === 0xe19e || g.uni === 0xe19c || g.uni === 0xe12c) old++;
 	}
 	return smufl >= old;
+}
+
+/**
+ * La famille de chaque police d'une page. Une police au nom anonyme (« TTFEE5C0B8t00 »…) dont les
+ * caractères sont surtout ceux de Sonata (têtes « œ », « ˙ », crochets « j », clés « & » « ? »…) est
+ * traitée comme une police Sonata.
+ */
+export function familiesOf(glyphs) {
+	const map = new Map();
+	const stats = new Map();
+	const SON = new Set([0x153, 0x2d9, 0x152, 0x2030, 0x2211, 0xd3, 0x6a, 0x4a, 0x72, 0x52, 0x23, 0x62, 0x6e, 0x26, 0x3f, 0x2e, 0x77, 0xf0cf, 0xf0fa]);
+	for (const g of glyphs) {
+		if (!map.has(g.font)) map.set(g.font, familyOf(g.font));
+		if (map.get(g.font)) continue;
+		const st = stats.get(g.font) ?? { n: 0, son: 0, heads: 0 };
+		st.n++;
+		if (SON.has(g.uni)) st.son++;
+		if (g.uni === 0x153 || g.uni === 0xf0cf || g.uni === 0x2d9) st.heads++;
+		stats.set(g.font, st);
+	}
+	let found = false;
+	for (const [f, st] of stats) {
+		if (st.heads >= 8 && st.son / st.n > 0.6) {
+			map.set(f, "sonata");
+			found = true;
+		}
+	}
+	// les autres polices anonymes de la même page, faites des mêmes caractères (clés, chiffres…)
+	if (found) for (const [f, st] of stats) if (!map.get(f) && st.son / st.n > 0.8) map.set(f, "sonata");
+	return map;
 }

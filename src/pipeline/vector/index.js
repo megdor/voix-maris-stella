@@ -5,14 +5,15 @@
 import { joinTrees } from "../join.js";
 import { xmlDocument } from "../copisteria/write.js";
 import { extractPage } from "./extract.js";
-import { familyOf } from "./fonts.js";
+import { familiesOf } from "./fonts.js";
 import { readPage, systemTrees } from "./read.js";
 
 /** Un coup d'œil : la page dessine-t-elle sa musique avec une police musicale connue ? */
 export async function looksVector(doc, OPS, maxPages = 2) {
 	for (let p = 1; p <= Math.min(doc.numPages, maxPages); p++) {
 		const raw = await extractPage(await doc.getPage(p), OPS);
-		const music = raw.glyphs.filter((g) => familyOf(g.font)).length;
+		const fams = familiesOf(raw.glyphs);
+		const music = raw.glyphs.filter((g) => fams.get(g.font)).length;
 		if (music >= 20) return true;
 	}
 	return false;
