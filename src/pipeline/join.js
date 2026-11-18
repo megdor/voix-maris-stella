@@ -416,7 +416,21 @@ function dropEmptyBars(parts) {
 			);
 			const next = lists[k][i + 1] ?? null;
 			if (next) {
-				next.children.unshift(...keep);
+				// les réglages de la mesure ôtée passent à la suivante, sauf ceux qu'elle redéfinit
+				const own = childrenOf(next, "attributes")[0];
+				const moved = [];
+				for (const el of keep) {
+					if (el.tag === "attributes" && own) {
+						const key = (c) => c.tag + (attr(c, "number") ?? "");
+						const has = new Set(own.children.map(key));
+						const ORDER = ["footnote", "level", "divisions", "key", "time", "staves", "part-symbol", "instruments", "clef", "staff-details", "transpose", "directive", "measure-style"];
+						own.children.push(...el.children.filter((c) => !has.has(key(c))));
+						own.children.sort((a, b) => ORDER.indexOf(a.tag) - ORDER.indexOf(b.tag));
+					} else if (el.tag === "print" && childrenOf(next, "print").length) {
+						continue;
+					} else moved.push(el);
+				}
+				next.children.unshift(...moved);
 			}
 			part.children.splice(part.children.indexOf(m), 1);
 			lists[k].splice(i, 1);
