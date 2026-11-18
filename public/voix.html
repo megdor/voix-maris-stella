@@ -1363,11 +1363,16 @@ Choeur.charger();
 window.__test={get S(){return S;},openText,P,curQ,Mine};
 /* ---- partition transmise par la page de lecture (même site, stockage local) ---- */
 (async function(){
-  let xml=null, titre="";
-  try{ xml=localStorage.getItem("voix-musicxml"); titre=localStorage.getItem("voix-titre")||"";
-       localStorage.removeItem("voix-musicxml"); localStorage.removeItem("voix-titre"); }catch(e){}
+  let xml=null, titre="", source="";
+  try{ xml=localStorage.getItem("voix-musicxml"); titre=localStorage.getItem("voix-titre")||""; source=localStorage.getItem("voix-source")||"";
+       localStorage.removeItem("voix-musicxml"); localStorage.removeItem("voix-titre"); localStorage.removeItem("voix-source"); }catch(e){}
   if(!xml) return;
   try{ await openText(xml, titre);
+       // PDF né numérique : lu dans le fichier même, sans reconnaissance d'image
+       if(source==="exacte"){ const p=document.createElement("div"); p.className="note-exacte";
+         p.style.cssText="margin-top:6px;font-size:13px;color:#2e6b3a";
+         p.textContent="📄 PDF numérique : la partition a été lue directement dans le fichier (notes, rythmes et paroles tels qu'écrits), sans reconnaissance d'image.";
+         $("#fiab").appendChild(p); }
        Mine.save(xml, $("#title").textContent); Choeur.deposer(xml, $("#title").textContent); }
   catch(e){ msg("La partition reçue n'a pas pu être ouverte : "+(e.message||e),true); }
 })();
