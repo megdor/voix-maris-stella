@@ -15,6 +15,11 @@ export async function looksVector(doc, OPS, maxPages = 2) {
 		const fams = familiesOf(raw.glyphs);
 		const music = raw.glyphs.filter((g) => fams.get(g.font)).length;
 		if (music >= 20) return true;
+		// sans police musicale : musique dessinée en formes, reconnue si la page donne des notes
+		if (!raw.images && raw.fills.length >= 20) {
+			const page = readPage(raw);
+			if (page.report.shapes && page.report.notes >= 20) return true;
+		}
 	}
 	return false;
 }

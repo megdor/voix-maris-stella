@@ -3,6 +3,7 @@
 // silences, voix, liaisons de prolongation, paroles ; puis un arbre MusicXML par système,
 // joints par join.js comme les pages lues par copista.
 
+import { shapeSymbols } from "./shapes.js";
 import { El } from "../copisteria/xml.js";
 import { familiesOf, mscoreUsesSmufl, symbolOf } from "./fonts.js";
 
@@ -423,6 +424,14 @@ export function readPage(raw, state = { keys: [], times: null }) {
 			syms.push({ s, x: g.x, y: g.y, size: g.size, adv: g.adv, font: g.font });
 		}
 	}
+	// pas de police musicale : la musique est dessinée en formes (abcm2ps…)
+	if (syms.filter((x) => x.s in HEADS).length < 8) {
+		const shp = shapeSymbols(raw, staves, sp);
+		if (shp.filter((x) => x.s in HEADS).length >= 8) {
+			syms.push(...shp);
+			report.shapes = true;
+		}
+	}
 	// têtes de notes (les petites : notes d'agrément, ignorées)
 	const bigHead = median(syms.filter((s) => s.s in HEADS).map((s) => s.size)) ?? 4 * sp;
 	const heads = syms
@@ -522,7 +531,7 @@ export function readPage(raw, state = { keys: [], times: null }) {
 		// --- hampes, ligatures, crochets : les accords
 		const beams = [];
 		for (const f of raw.fills) {
-			if (f.curved || f.stroked || f.pts.length >= 12 || !inSys((f.y0 + f.y1) / 2)) continue;
+			if (f.used || f.curved || f.stroked || f.pts.length >= 12 || !inSys((f.y0 + f.y1) / 2)) continue;
 			if (f.x1 - f.x0 < 0.6 * sp) continue;
 			const mid = spanAt(f.pts, (f.x0 + f.x1) / 2);
 			if (!mid) continue;
@@ -803,7 +812,7 @@ export function readPage(raw, state = { keys: [], times: null }) {
 		}
 		// liaisons de prolongation
 		for (const f of raw.fills) {
-			if (!f.curved || !inSys((f.y0 + f.y1) / 2)) continue;
+			if (f.used || !f.curved || !inSys((f.y0 + f.y1) / 2)) continue;
 			const w = f.x1 - f.x0;
 			if (w < 0.8 * sp || f.y1 - f.y0 > 2 * sp) continue;
 			const cy = (f.y0 + f.y1) / 2;
@@ -824,6 +833,11 @@ export function readPage(raw, state = { keys: [], times: null }) {
 			const str = t.str.trim();
 			if (DYN.test(str) || t.x < sys[k].x0 || !/\p{L}/u.test(str)) continue; // chiffres (triolets, doigtés) : pas des paroles
 			lyr[k].push({ ...t, str });
+		}
+		// couplets : une ligne de paroles par couplet, numérotées de haut en bas sur tout le système
+		for (const L of lyr) {
+			const ys = cluster(L.map((l) => l.y), 0.6 * sp);
+			for (const l of L) l.verse = ys.findIndex((c) => c.includes(l.y)) + 1;
 		}
 
 		// --- mesures
@@ -922,7 +936,7 @@ function voicesOf(evs, sp) {
 		const ys = (c) => c.flatMap((e) => (e.heads ? e.heads.map((h) => h.y) : []));
 		const gap = prev ? col[0].x - Math.max(...prev.map((e) => e.x)) : Infinity;
 		// écart toléré : une tête ; davantage si un point ou une tête large (blanche, ronde) les sépare
-		const wide = prev && prev.some((e) => !e.rest && (e.dots || e.dur >= 2));
+		const wide = prev && (prev.some((e) => !e.rest && (e.dots || e.dur >= 2)) || col.some((e) => !e.rest && e.dur >= 2 && !e.dots));
 		const second = prev && ys(col).some((y) => ys(prev).some((z) => Math.abs(y - z) <= 0.6 * sp));
 		if (
 			prev &&
@@ -1167,13 +1181,15 @@ export function systemTrees(page, ctx) {
 									if (h.tieStop) no.sub("tied", null, { type: "stop" });
 									if (h.tieStart) no.sub("tied", null, { type: "start" });
 								}
-								if (j === 0 && vi === 0) {
+								const near = (l) => Math.abs(l.x + (l.x1 - l.x) / 2 - (h.x + h.w / 2)) < 1.8 * sp;
+								// la syllabe va à la 1re voix ; à une autre voix seulement si la 1re n'a pas de note là
+								const v0has = (l) => (voices[0]?.evs ?? []).some((q) => q.heads?.length && Math.abs(l.x + (l.x1 - l.x) / 2 - (q.heads[0].x + q.heads[0].w / 2)) < 1.8 * sp);
+								if (j === 0 && (vi === 0 || lyrics.some((l) => !l.used && near(l) && !v0has(l)))) {
 									// paroles : la syllabe alignée sur cette note
-									const mine = lyrics.filter((l) => !l.used && Math.abs(l.x + (l.x1 - l.x) / 2 - (h.x + h.w / 2)) < 1.8 * sp);
-									const lines = [...new Set(mine.map((l) => Math.round(l.y)))].sort((a, b) => a - b);
+									const mine = lyrics.filter((l) => !l.used && near(l) && (vi === 0 || !v0has(l)));
 									mine.forEach((l) => {
 										l.used = true;
-										const ly = nt.sub("lyric", null, { number: lines.indexOf(Math.round(l.y)) + 1 });
+										const ly = nt.sub("lyric", null, { number: l.verse ?? 1 });
 										const s = l.str.replace(/[-–]$/, "");
 										ly.sub("syllabic", l.hypAfter ? (l.hypBefore ? "middle" : "begin") : l.hypBefore ? "end" : "single");
 										ly.sub("text", s);
