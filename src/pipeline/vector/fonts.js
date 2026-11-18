@@ -110,7 +110,7 @@ export function familiesOf(glyphs) {
 		if (map.get(g.font)) continue;
 		const st = stats.get(g.font) ?? { n: 0, son: 0, heads: 0 };
 		st.n++;
-		if (SON.has(g.uni)) st.son++;
+		if (SON.has(g.uni) || (g.uni >= 0xf000 && g.uni <= 0xf0ff && SONATA[g.uni & 0xff])) st.son++;
 		if (g.uni === 0x153 || g.uni === 0xf0cf || g.uni === 0x2d9) st.heads++;
 		stats.set(g.font, st);
 	}

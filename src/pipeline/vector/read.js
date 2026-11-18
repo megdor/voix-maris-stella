@@ -279,6 +279,12 @@ function splitRuns(runs, glyphs) {
 		const out = [];
 		let cur = null;
 		for (const g of gs) {
+			if (/^\s*$/.test(g.ch)) {
+				// une espace : fin du mot (position exacte de chaque mot)
+				if (cur) out.push(cur);
+				cur = null;
+				continue;
+			}
 			if (cur && g.x - cur.x1 <= 0.25 * r.size && g.x >= cur.x - 0.5) {
 				cur.str += g.ch;
 				cur.x1 = Math.max(cur.x1, g.x + g.adv);
