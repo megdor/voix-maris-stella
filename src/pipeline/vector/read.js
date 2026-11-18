@@ -467,6 +467,60 @@ export function readPage(raw, state = { keys: [], times: null }) {
 		const bars = barlines(sys, V, sHeads);
 		const sV = V.filter((v) => v.y1 >= lim0 && v.y0 < lim1);
 
+		// --- reprises : deux points dans les 2e et 3e interlignes, contre une barre
+		// (le point de reprise SMuFL a son origine sur la ligne, une demi-interligne sous son centre)
+		const repDots = sSyms.filter((d) => d.s === "dot" || d.s === "seg").map((d) => (d.s === "seg" ? Object.assign(d, { yc: d.y - 0.5 * (sys.find((st) => d.y > st.top - sp && d.y < st.bot + sp)?.sp ?? sp) }) : Object.assign(d, { yc: d.y })));
+		const dotsAt = (b, side) => {
+			let n = 0;
+			for (const st of sys) {
+				const ok = [1.5, 2.5].every((q) =>
+					repDots.some((d) => Math.abs(d.yc - (st.bot - q * st.sp)) < 0.35 * st.sp && (side < 0 ? d.x < b - 0.1 * sp && d.x > b - 2.4 * sp : d.x > b + 0.1 * sp && d.x < b + 2.4 * sp)),
+				);
+				if (ok) n++;
+			}
+			return n >= Math.max(1, Math.ceil(0.6 * sys.length));
+		};
+		const markRep = (b, side) => {
+			for (const d of repDots) if (side < 0 ? d.x < b - 0.1 * sp && d.x > b - 2.4 * sp : d.x > b + 0.1 * sp && d.x < b + 2.4 * sp) if (sys.some((st) => [1.5, 2.5].some((q) => Math.abs(d.yc - (st.bot - q * st.sp)) < 0.35 * st.sp))) d.rep = true;
+		};
+		const reps = bars.slice(0, -1).map(() => ({}));
+		bars.forEach((b, i) => {
+			if (i > 0 && dotsAt(b, -1)) {
+				reps[i - 1].back = true;
+				markRep(b, -1);
+			}
+			if (i < bars.length - 1 && dotsAt(b, 1)) {
+				reps[i].fwd = true;
+				markRep(b, 1);
+			}
+		});
+		// reprise au début de la ligne, après la clé et l'armure (la barre n'est pas une barre de mesure)
+		if (!reps[0]?.fwd) {
+			const start = sV.filter((v) => v.x > bars[0] + sp && v.x < bars[0] + 9 * sp && sys.every((st) => v.y0 <= st.top + 0.3 * sp || v.y1 < st.top) && v.y0 <= sys[0].top + 0.3 * sp && v.y1 >= sys[0].bot - 0.3 * sp);
+			for (const v of start) if (dotsAt(v.x, 1)) {
+				reps[0].fwd = true;
+				markRep(v.x, 1);
+				break;
+			}
+		}
+		// 1re et 2e fois : un crochet au-dessus de la portée du haut, avec son numéro
+		const voltaSegs = raw.segs.filter((g) => Math.abs(g.y1 - g.y0) < 0.2 * sp && Math.abs(g.x1 - g.x0) > 5 * sp && g.y0 < sys[0].top - 0.8 * sp && g.y0 > sys[0].top - 7 * sp && Math.min(g.x0, g.x1) >= bars[0] - sp);
+		for (const g of voltaSegs) {
+			const xa = Math.min(g.x0, g.x1);
+			const xb = Math.max(g.x0, g.x1);
+			const hook = (x) => raw.segs.some((v) => Math.abs(v.x1 - v.x0) < 0.2 * sp && Math.abs(v.x0 - x) < 0.4 * sp && Math.min(v.y0, v.y1) <= g.y0 + 0.3 * sp && Math.max(v.y0, v.y1) > g.y0 + 0.8 * sp);
+			if (!hook(xa)) continue;
+			// pas un cadre (numéro de repère encadré)
+			if (raw.segs.some((h) => h !== g && Math.abs(h.y1 - h.y0) < 0.2 * sp && h.y0 > g.y0 + 0.8 * sp && h.y0 < g.y0 + 2.5 * sp && h.y0 < sys[0].top - 0.3 * sp && Math.abs(Math.min(h.x0, h.x1) - xa) < 0.5 * sp)) continue;
+			const num = texts.find((t) => /^[1-9][.,]?$/.test(t.str.trim()) && t.x > xa - 0.2 * sp && t.x < xa + 1.5 * sp && t.y > g.y0 && t.y < g.y0 + 3.5 * sp);
+			if (!num) continue;
+			const ms = reps.map((_, m) => m).filter((m) => bars[m + 1] > xa + 0.5 * sp && bars[m] < xb - 0.5 * sp);
+			if (!ms.length) continue;
+			const n = num.str.trim().replace(/[.,]/, "");
+			reps[ms[0]].endStart = n;
+			reps[ms[ms.length - 1]].endStop = { n, closed: hook(xb) };
+		}
+
 		// --- clés, armures, chiffrages par portée
 		const staffInfo = sys.map((st, k) => {
 			const mine = sSyms.filter((s) => staffOf(s.y) === k);
@@ -646,7 +700,7 @@ export function readPage(raw, state = { keys: [], times: null }) {
 			}
 		}
 		// points de prolongation : chaque point à l'accord dont une tête est la plus proche
-		const dots = sSyms.filter((s) => s.s === "dot");
+		const dots = sSyms.filter((s) => s.s === "dot" && !s.rep);
 		for (const ch of chords) ch.dots = 0;
 		const dotCols = new Map();
 		for (const d of dots) {
@@ -899,7 +953,7 @@ export function readPage(raw, state = { keys: [], times: null }) {
 			}
 			tempos.push({ x: eq.x, bpm: Math.round(bpm * unit) });
 		}
-		out.push({ staves: sys, bars, measures, chords, rests, braces: braces.filter((b) => b.y1 - b.y0 > 6 * sp), sung, tempos });
+		out.push({ staves: sys, bars, reps, measures, chords, rests, braces: braces.filter((b) => b.y1 - b.y0 > 6 * sp), sung, tempos });
 	});
 	report.notes = out.reduce((a, s) => a + s.chords.reduce((b, c) => b + c.heads.length, 0), 0);
 	report.rests = out.reduce((a, s) => a + s.rests.length, 0);
@@ -1066,6 +1120,13 @@ export function systemTrees(page, ctx) {
 			if (m === 0) attrs.sub("divisions", DIV);
 			if (m === 0 && grp.length > 1) attrs.sub("staves", grp.length);
 			meas.children.push(attrs);
+			const rp = sys.reps?.[m] ?? {};
+			if (rp.fwd || rp.endStart) {
+				const bl = meas.sub("barline", null, { location: "left" });
+				if (rp.fwd) bl.sub("bar-style", "heavy-light");
+				if (rp.endStart) bl.sub("ending", null, { number: rp.endStart, type: "start" });
+				if (rp.fwd) bl.sub("repeat", null, { direction: "forward" });
+			}
 			let cursor = 0;
 			if (gi === 0) {
 				const tp = (sys.tempos ?? []).find((t) => (m === 0 && t.x < sys.bars[1]) || (t.x >= sys.bars[m] && t.x < sys.bars[m + 1]));
@@ -1200,6 +1261,12 @@ export function systemTrees(page, ctx) {
 					}
 				});
 			});
+			if (rp.back || rp.endStop) {
+				const bl = meas.sub("barline", null, { location: "right" });
+				if (rp.back) bl.sub("bar-style", "light-heavy");
+				if (rp.endStop) bl.sub("ending", null, { number: rp.endStop.n, type: rp.endStop.closed ? "stop" : "discontinue" });
+				if (rp.back) bl.sub("repeat", null, { direction: "backward" });
+			}
 			if (!attrs.children.length) meas.children = meas.children.filter((x) => x !== attrs);
 			else {
 				const ORDER = ["divisions", "key", "time", "staves", "clef"];
