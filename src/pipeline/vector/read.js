@@ -632,7 +632,9 @@ export function readPage(raw, state = { keys: [], times: null }) {
 			const end = up ? st.y0 : st.y1;
 			const len = st.y1 - st.y0;
 			// une tête au bout libre de la hampe appartient à une autre voix (deux voix entrecroisées)
-			const on = near.filter((h) => Math.abs(h.y - base) <= Math.max(0.7 * sp, len - 1.8 * sp) + 0.01);
+			const on0 = near.filter((h) => Math.abs(h.y - base) <= Math.max(0.7 * sp, len - 1.8 * sp) + 0.01);
+			// deux têtes superposées (unisson de deux voix, une tête par voix) : une seule par hampe
+			const on = on0.filter((h, i) => !on0.slice(0, i).some((g) => Math.abs(g.x - h.x) < 0.25 * sp && Math.abs(g.y - h.y) < 0.2 * sp));
 			if (!on.length) continue;
 			const my = on.reduce((a, h) => a + h.y, 0) / on.length;
 			// têtes du côté normal de la hampe (pour placer l'accord)
@@ -678,6 +680,9 @@ export function readPage(raw, state = { keys: [], times: null }) {
 		}
 		// rondes et brèves (sans hampe), et têtes restées seules
 		const taken = new Set(chords.flatMap((c) => c.heads.map((h) => h.id)));
+		// la tête doublée d'un unisson (une par voix) est prise avec sa jumelle
+		const takenHeads = chords.flatMap((c) => c.heads);
+		for (const h of sHeads) if (!taken.has(h.id) && takenHeads.some((g) => g.k === h.k && Math.abs(g.x - h.x) < 0.25 * sp && Math.abs(g.y - h.y) < 0.2 * sp)) taken.add(h.id);
 		const lone = sHeads.filter((h) => !taken.has(h.id));
 		const loneChords = [];
 		for (const c of cluster(lone.map((h) => h.x), 0.5 * sp)) {
@@ -1059,7 +1064,7 @@ function voicesOf(evs, sp) {
 			let owner = voices.find((w) => usedHere.has(w) && w.evs.length && w.evs[w.evs.length - 1].heads?.length > 1 && col.includes(w.evs[w.evs.length - 1]));
 			if (!owner) {
 				// une seule note pour les deux voix qui se rejoignent (unisson implicite)
-				const solo = col.length === 1 && !col[0].rest ? col[0] : null;
+				const solo = col.length === 1 && !col[0].rest && col[0].heads?.length === 1 ? col[0] : null;
 				const last = v.evs[v.evs.length - 1];
 				owner = solo && last?.heads ? voices.find((w) => w !== v && w.evs[w.evs.length - 1] === solo) : null;
 				if (owner) {
