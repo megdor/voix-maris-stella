@@ -637,13 +637,25 @@ export function readPage(raw, state = { keys: [], times: null }) {
 			const my = on.reduce((a, h) => a + h.y, 0) / on.length;
 			// têtes du côté normal de la hampe (pour placer l'accord)
 			const main = on.filter((h) => (up ? rightEdge(h) : leftEdge(h)));
-			let nb = 0;
+			const onStem = [];
 			for (const b of beams) {
 				if (st.x < b.x0 - 0.2 * sp || st.x > b.x1 + 0.2 * sp) continue;
 				const sp_ = spanAt(b.pts, Math.min(Math.max(st.x, b.x0 + 0.01), b.x1 - 0.01));
 				if (!sp_) continue;
 				const c = (sp_[0] + sp_[1]) / 2;
-				if (up ? c >= end - 0.5 * sp && c <= end + 3.2 * sp : c <= end + 0.5 * sp && c >= end - 3.2 * sp) nb++;
+				if (up ? c >= end - 0.5 * sp && c <= end + 3.2 * sp : c <= end + 0.5 * sp && c >= end - 3.2 * sp) onStem.push({ b, c });
+			}
+			// une ligature d'une autre voix (ou de l'autre portée) qui croise la hampe : pente différente
+			const slope = (b) => {
+				const a = spanAt(b.pts, b.x0 + 0.01);
+				const z = spanAt(b.pts, b.x1 - 0.01);
+				return a && z && b.x1 - b.x0 > 0.5 ? ((z[0] + z[1]) / 2 - (a[0] + a[1]) / 2) / (b.x1 - b.x0) : 0;
+			};
+			let nb = onStem.length;
+			if (nb > 1) {
+				const prim = onStem.sort((p, q) => Math.abs(p.c - end) - Math.abs(q.c - end))[0];
+				const s0 = slope(prim.b);
+				nb = onStem.filter((o) => o === prim || Math.abs(slope(o.b) - s0) < 0.06 || o.b.x1 - o.b.x0 < 2 * sp).length;
 			}
 			let nf = 0;
 			for (const f of flags) {
