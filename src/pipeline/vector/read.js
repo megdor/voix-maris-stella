@@ -765,7 +765,7 @@ export function readPage(raw, state = { keys: [], times: null }) {
 		const braces = [];
 		for (const g of syms.filter((x) => x.s === "brace" && x.x < sys[0].x0 + sp)) braces.push({ y0: g.y - g.size, y1: g.y });
 		const pieces = raw.fills
-			.filter((f) => f.curved && f.x1 <= sys[0].x0 + 0.5 * sp && f.x1 > sys[0].x0 - 5 * sp && f.y1 - f.y0 > 3 * sp && f.x1 - f.x0 < 3 * sp && inSys((f.y0 + f.y1) / 2))
+			.filter((f) => (f.curved || f.pts.length >= 12) && f.x1 <= sys[0].x0 + 0.5 * sp && f.x1 > sys[0].x0 - 5 * sp && f.y1 - f.y0 > 3 * sp && f.x1 - f.x0 < 3 * sp && inSys((f.y0 + f.y1) / 2))
 			.sort((a, b) => a.y0 - b.y0);
 		// une accolade dessinée en deux moitiés : réunies
 		for (const f of pieces) {
