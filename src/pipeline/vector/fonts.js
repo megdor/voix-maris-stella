@@ -44,7 +44,7 @@ const SONATA = {
 	0x2e: "dot", 0xaa: "dot", // point de prolongation (Opus Special)
 	0x30: "t0", 0x31: "t1", 0x32: "t2", 0x33: "t3", 0x34: "t4", 0x35: "t5", 0x36: "t6", 0x37: "t7", 0x38: "t8", 0x39: "t9",
 	0x63: "tC", 0x43: "tCut",
-	0x3d: "staff5", 0x5f: "ledger", 0x55: "fermata", 0x75: "fermata",
+	0x3d: "staff5", 0x5f: "ledger", 0x55: "fermata", 0x75: "fermata", 0x7b: "brace", 0xa7: "brace",
 };
 
 // Unicode -> octet Mac Roman (les polices Sonata déclarent souvent leurs caractères ainsi)

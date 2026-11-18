@@ -611,7 +611,7 @@ export function readPage(raw, state = { keys: [], times: null }) {
 			const k = sys.findIndex((st, j) => t.y > st.bot + 0.8 * sp && t.y < (j + 1 < sys.length ? sys[j + 1].top - 0.3 * sp : st.bot + 9 * sp));
 			if (k < 0) continue;
 			const str = t.str.trim();
-			if (DYN.test(str) || t.x < sys[k].x0) continue;
+			if (DYN.test(str) || t.x < sys[k].x0 || !/\p{L}/u.test(str)) continue; // chiffres (triolets, doigtés) : pas des paroles
 			lyr[k].push({ ...t, str });
 		}
 
@@ -633,7 +633,21 @@ export function readPage(raw, state = { keys: [], times: null }) {
 			});
 			measures.push(ms);
 		}
-		out.push({ staves: sys, bars, measures, chords, rests });
+		// accolades (piano, orgue) : un glyphe « { », ou une courbe pleine haute et étroite à gauche
+		const braces = [];
+		for (const g of syms.filter((x) => x.s === "brace" && x.x < sys[0].x0 + sp)) braces.push({ y0: g.y - g.size, y1: g.y });
+		const pieces = raw.fills
+			.filter((f) => f.curved && f.x1 <= sys[0].x0 + 0.5 * sp && f.x1 > sys[0].x0 - 5 * sp && f.y1 - f.y0 > 3 * sp && f.x1 - f.x0 < 3 * sp && inSys((f.y0 + f.y1) / 2))
+			.sort((a, b) => a.y0 - b.y0);
+		// une accolade dessinée en deux moitiés : réunies
+		for (const f of pieces) {
+			const last = braces[braces.length - 1];
+			if (last && last.curve && f.y0 <= last.y1 + 0.5 && Math.abs(f.x0 - last.x0) < sp) last.y1 = Math.max(last.y1, f.y1);
+			else braces.push({ y0: f.y0, y1: f.y1, x0: f.x0, curve: true });
+		}
+		// un crochet de chœur n'est pas une accolade : les portées avec paroles restent séparées
+		const sung = sys.map((_, k) => lyr[k].length > 0);
+		out.push({ staves: sys, bars, measures, chords, rests, braces: braces.filter((b) => b.y1 - b.y0 > 6 * sp), sung });
 	});
 	report.notes = out.reduce((a, s) => a + s.chords.reduce((b, c) => b + c.heads.length, 0), 0);
 	report.rests = out.reduce((a, s) => a + s.rests.length, 0);
@@ -735,31 +749,45 @@ export function systemTrees(page, ctx) {
 		const n = sys.staves.length;
 		const root = new El("score-partwise", { version: "4.0" });
 		const pl = root.sub("part-list");
-		const parts = [];
+		// une accolade réunit deux portées (piano, orgue) : une partie sur deux portées
+		const groups = [];
 		for (let k = 0; k < n; k++) {
-			const sc = pl.sub("score-part", null, { id: `P${k + 1}` });
-			sc.sub("part-name", `Part ${k + 1}`);
-			parts.push(root.sub("part", null, { id: `P${k + 1}` }));
+			if (k + 1 < n && !sys.sung?.[k] && !sys.sung?.[k + 1] && sys.braces?.some((b) => b.y0 <= sys.staves[k].top + sp && b.y1 >= sys.staves[k + 1].bot - sp && b.y0 >= sys.staves[k].top - 3 * sp && b.y1 <= sys.staves[k + 1].bot + 3 * sp)) {
+				groups.push([k, k + 1]);
+				k++;
+			} else groups.push([k]);
 		}
+		const parts = groups.map((g, i) => {
+			const sc = pl.sub("score-part", null, { id: `P${i + 1}` });
+			sc.sub("part-name", `Part ${i + 1}`);
+			return root.sub("part", null, { id: `P${i + 1}` });
+		});
 		// les hauts silences (au-dessus de la ligne du milieu) : voix du haut
 		for (const r of sys.rests) {
 			const st = sys.staves[r.k];
 			r.high = r.y < (st.top + st.bot) / 2 - 0.2 * sp;
 		}
 		sys.measures.forEach((ms, m) => {
-			for (let k = 0; k < n; k++) {
+			groups.forEach((grp, gi) => {
+			const meas = parts[gi].sub("measure", null, { number: m + 1 });
+			const attrs = new El("attributes");
+			if (m === 0) attrs.sub("divisions", DIV);
+			if (m === 0 && grp.length > 1) attrs.sub("staves", grp.length);
+			meas.children.push(attrs);
+			let cursor = 0;
+			grp.forEach((k, si) => {
 				const c = (ctx.staff[k] ??= { clef: null, fifths: 0, time: null });
-				const meas = parts[k].sub("measure", null, { number: m + 1 });
 				const cell = ms[k];
-				const attrs = new El("attributes");
-				if (m === 0) attrs.sub("divisions", DIV);
+				const voiceBase = 4 * si;
+				const staffNo = grp.length > 1 ? si + 1 : null;
+				if (si > 0 && cursor > 1e-6) meas.sub("backup").sub("duration", Math.round(cursor * DIV));
 				if (cell.keyIn !== null && (m === 0 || cell.keyIn !== c.fifths)) c.fifths = cell.keyIn;
 				else if (m === 0 && cell.keyIn === null && ctx.firstSystem) c.fifths = c.fifths ?? 0;
-				if (m === 0 || cell.keyIn !== null) attrs.sub("key").sub("fifths", c.fifths);
+				if (si === 0 && (m === 0 || cell.keyIn !== null)) attrs.sub("key").sub("fifths", c.fifths);
 				const tm = cell.timeIn ?? (k > 0 ? ms.find((x) => x.timeIn)?.timeIn : null) ?? ms.find((x) => x.timeIn)?.timeIn;
 				if (tm) c.time = tm;
 				else if (ctx.time && !c.time) c.time = ctx.time;
-				if (c.time && (m === 0 || tm)) {
+				if (si === 0 && c.time && (m === 0 || tm)) {
 					const t = attrs.sub("time");
 					t.sub("beats", c.time.beats);
 					t.sub("beat-type", c.time.type);
@@ -769,12 +797,11 @@ export function systemTrees(page, ctx) {
 				if (clefName) c.clef = clefName;
 				if (m === 0 || cell.clefIn) {
 					const cx = CLEF_XML[c.clef ?? "clefG"];
-					const cl = attrs.sub("clef");
+					const cl = attrs.sub("clef", null, staffNo ? { number: staffNo } : {});
 					cl.sub("sign", cx.sign);
 					cl.sub("line", cx.line);
 					if (cx.oct) cl.sub("clef-octave-change", cx.oct);
 				}
-				if (attrs.children.length) meas.children.push(attrs);
 				// notes
 				const st = sys.staves[k];
 				const measLen = c.time ? (c.time.beats * 4) / c.time.type : null;
@@ -801,12 +828,13 @@ export function systemTrees(page, ctx) {
 						const back = voices[vi - 1].end;
 						if (back > 0) meas.sub("backup").sub("duration", Math.round(back * DIV));
 					}
+					cursor = voice.end;
 					if (voice.start > 1e-6) meas.sub("forward").sub("duration", Math.round(voice.start * DIV));
 					for (const e of evs) {
 						if (e.gap) {
 							const fw = meas.sub("forward");
 							fw.sub("duration", Math.round(e.gap * DIV));
-							fw.sub("voice", vi + 1);
+							fw.sub("voice", voiceBase + vi + 1);
 							continue;
 						}
 						let dur = e.dur;
@@ -819,9 +847,10 @@ export function systemTrees(page, ctx) {
 							const nt = meas.sub("note");
 							nt.sub("rest");
 							nt.sub("duration", dv);
-							nt.sub("voice", vi + 1);
+							nt.sub("voice", voiceBase + vi + 1);
 							const ty = noteType(dur, 0, false);
 							if (ty && !(e.whole && evs.length === 1)) nt.sub("type", ty);
+							if (staffNo) nt.sub("staff", staffNo);
 						} else {
 							const hs = [...e.heads].sort((a, b) => b.y - a.y);
 							hs.forEach((h, j) => {
@@ -834,7 +863,7 @@ export function systemTrees(page, ctx) {
 								nt.sub("duration", dv);
 								if (h.tieStop) nt.sub("tie", null, { type: "stop" });
 								if (h.tieStart) nt.sub("tie", null, { type: "start" });
-								nt.sub("voice", vi + 1);
+								nt.sub("voice", voiceBase + vi + 1);
 								const ty = noteType(e.dur, e.dots ?? 0, e.tuplet);
 								if (ty) nt.sub("type", ty);
 								for (let q = 0; q < (e.dots ?? 0); q++) nt.sub("dot");
@@ -844,6 +873,7 @@ export function systemTrees(page, ctx) {
 									tmod.sub("normal-notes", 2);
 								}
 								if (e.up !== null && e.up !== undefined) nt.sub("stem", e.up ? "up" : "down");
+								if (staffNo) nt.sub("staff", staffNo);
 								if (h.tieStart || h.tieStop) {
 									const no = nt.sub("notations");
 									if (h.tieStop) no.sub("tied", null, { type: "stop" });
@@ -865,7 +895,13 @@ export function systemTrees(page, ctx) {
 						}
 					}
 				});
+			});
+			if (!attrs.children.length) meas.children = meas.children.filter((x) => x !== attrs);
+			else {
+				const ORDER = ["divisions", "key", "time", "staves", "clef"];
+				attrs.children.sort((a, b) => ORDER.indexOf(a.tag) - ORDER.indexOf(b.tag));
 			}
+			});
 		});
 		trees.push({ tree: root, measures: sys.measures.length });
 	}
