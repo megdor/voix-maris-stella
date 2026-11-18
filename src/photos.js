@@ -15,7 +15,31 @@ function loadPdfjs() {
 	}
 	return pdfjsPromise;
 }
-const isPdf = (f) => f.type === "application/pdf" || /\.pdf$/i.test(f.name ?? "");
+export const isPdf = (f) => f.type === "application/pdf" || /\.pdf$/i.test(f.name ?? "");
+/**
+ * Chœur Maris Stella : un PDF « né numérique » (exporté de MuseScore, Sibelius, Finale…) se lit
+ * directement dans le fichier, sans reconnaissance d'image : notes, rythmes et paroles exacts.
+ * Renvoie { musicXml, report } si la lecture est sûre, sinon null (le PDF passe alors par copista).
+ */
+export async function readExact(file) {
+	const pdfjs = await loadPdfjs();
+	const { looksVector, readVectorPdf } = await import("./pipeline/vector/index.js");
+	const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()), wasmUrl: BASE, disableFontFace: true });
+	try {
+		const doc = await task.promise;
+		if (!(await looksVector(doc, pdfjs.OPS))) return null;
+		const r = await readVectorPdf(doc, pdfjs.OPS);
+		// contrôle : moins de 15 % de mesures dont une voix n'a pas la bonne durée
+		if (!r.ok || r.report.badRatio > 0.15) return null;
+		return r;
+	} catch (e) {
+		console.warn("lecture exacte impossible", e);
+		return null;
+	} finally {
+		await task.destroy();
+	}
+}
+
 /** Les pages d'un PDF, en images PNG (300 ppp, 3600 pixels au plus de côté). */
 export async function pagesFromPdf(file) {
 	const pdfjs = await loadPdfjs();
