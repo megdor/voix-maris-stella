@@ -297,6 +297,22 @@ function parseScore(xmlText){
   if(!parts.length) throw new Error("Aucune portée trouvée.");
   const nMeas=Math.max(...parts.map(p=>kids(p,"measure").length));
   const accompSet=accompParts(parts, partNames);
+  // Ténor écrit en clé de sol simple (éditions anciennes : « TENORE » sans le petit 8). Dans un chœur à portées
+  // séparées, les voix descendent de haut en bas : la 3e portée en clé de sol, juste au-dessus de la clé de fa,
+  // lue plus haut que la voix au-dessus d'elle, chante en réalité une octave plus bas.
+  { const info=parts.map((p,pi)=>{ if(accompSet.has(pi)) return null;
+      let staves=1, sign=null, oct=0, sum=0, n=0;
+      for(const m of kids(p,"measure")) for(const el of m.children){
+        if(el.tagName==="attributes"){ const s=txt(el,"staves"); if(s) staves=+s; const c=el.querySelector("clef"); if(c&&sign===null){ sign=txt(c,"sign"); oct=+(txt(c,"clef-octave-change")||0); } }
+        else if(el.tagName==="note" && el.querySelector("pitch")){ sum+=12*((+txt(el,"pitch > octave"))+1)+(STEP[txt(el,"pitch > step")]||0); n++; } }
+      return staves===1 && n>=20 ? {p,sign,oct,mean:sum/n} : null; }).filter(Boolean);
+    for(let i=2;i<info.length-1;i++){ const t=info[i];
+      if(t.sign!=="G" || t.oct!==0 || info[i+1].sign!=="F" || info[i-1].sign!=="G") continue;
+      if(info.slice(0,i).filter(x=>x.sign==="G").length<2 || t.mean<=info[i-1].mean+2) continue;
+      for(const o of t.p.querySelectorAll("note pitch > octave")) o.textContent=String(+o.textContent-1);
+      for(const c of t.p.querySelectorAll("clef")) if(txt(c,"sign")==="G" && !c.querySelector("clef-octave-change")){
+        const e=doc.createElement("clef-octave-change"); e.textContent="-1"; c.appendChild(e); }
+    } }
 
   // structure par mesure (tirée de la 1re partie) : n°, reprises, voltas, longueur, chiffrage
   const measInfo=[]; for(let i=0;i<nMeas;i++) measInfo.push({num:null,fwd:false,back:0,ending:null,endingStart:false,endingStop:false,len:0,beats:4,beatType:4,tempo:null});
