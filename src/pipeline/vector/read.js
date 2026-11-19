@@ -916,7 +916,8 @@ export function readPage(raw, state = { keys: [], times: null }) {
 				a.tieStart = true;
 				b.tieStop = true;
 			} else if (a && !b && f.x1 > Math.max(...sys.map((s) => s.x1)) - 2 * sp) a.tieStart = true;
-			else if (b && !a && f.x0 < Math.min(...sys.map((s) => s.x0)) + 8 * sp && !sHeads.some((h) => h.x < b.x && h.k === b.k && h.x > f.x0 - sp)) b.tieStop = true;
+			// demi-liaison en début de ligne : elle aboutit à la première note de la portée (après clé et armure)
+			else if (b && !a && f.x0 < bars[1] && (f.x0 < Math.min(...sys.map((q) => q.x0)) + 8 * sp || (f.x1 - f.x0 < 4 * sp && Math.abs(b.y - cy) < sp)) && !sHeads.some((h) => h.x < b.x - 0.5 * sp && h.k === b.k)) b.tieStop = true;
 		}
 		// paroles : textes sous chaque portée
 		const lyr = sys.map(() => []);
