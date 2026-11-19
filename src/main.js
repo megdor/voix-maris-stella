@@ -23,12 +23,9 @@ window.addEventListener("unhandledrejection", (e) => {
 // version avant toute lecture (les résultats déjà lus restent dans « Mes partitions »)
 let hiddenAt = 0;
 const myMain = [...document.scripts].map((x) => x.src).find((x) => /\/assets\/index-[\w-]+\.js$/.test(x));
-document.addEventListener("visibilitychange", async () => {
-	if (document.hidden) {
-		hiddenAt = Date.now();
-		return;
-	}
-	if (!myMain || !hiddenAt || Date.now() - hiddenAt < 10 * 60 * 1000) return;
+// la version en ligne est-elle celle de cette page ? (sinon : rechargée, avant qu'on y dépose une partition)
+async function checkFresh() {
+	if (!myMain) return;
 	try {
 		const html = await (await fetch(location.pathname + "?check=" + Date.now(), { cache: "no-store" })).text();
 		const cur = html.match(/assets\/index-[\w-]+\.js/)?.[0];
@@ -36,7 +33,17 @@ document.addEventListener("visibilitychange", async () => {
 	} catch {
 		/* hors ligne : on garde la page telle quelle */
 	}
+}
+document.addEventListener("visibilitychange", () => {
+	if (document.hidden) {
+		hiddenAt = Date.now();
+		return;
+	}
+	if (hiddenAt && Date.now() - hiddenAt >= 10 * 60 * 1000) checkFresh();
 });
+// au chargement aussi : le navigateur garde la page d'accueil en cache une dizaine de minutes après une
+// mise à jour, et l'ancienne page réclamerait des modules supprimés au premier dépôt de PDF
+checkFresh();
 // la page a démarré avec la version courante : un prochain problème pourra recharger à nouveau
 setTimeout(() => sessionStorage.removeItem("voix-reload-" + location.pathname), 30000);
 
