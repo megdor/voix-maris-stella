@@ -48,7 +48,8 @@ export async function readVectorPdf(doc, OPS, { onProgress } = {}) {
 		});
 	}
 	if (!trees.length || report.notes < 4) return { ok: false, report };
-	const root = joinTrees(trees);
+	// lecture exacte : chaque portée est déjà lue telle qu'écrite, pas de partage des portées à deux voix
+	const root = joinTrees(trees, { spread: false });
 	// joinTrees marque chaque arbre d'un saut de page : ici un arbre est un système
 	for (const part of root.children.filter((c) => c.tag === "part")) {
 		let j = 0;
