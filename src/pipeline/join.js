@@ -193,6 +193,7 @@ function splitMeasure(measure) {
 			last = null;
 		}
 	}
+	const end = Math.max(0, ...groups.map((g) => g.t + g.d));
 	const voices = [...new Set(groups.filter((g) => !g.rest).map((g) => g.voice))].sort();
 	const v1 = voices[0] ?? "1";
 	const v2 = voices[1] ?? null;
@@ -218,7 +219,9 @@ function splitMeasure(measure) {
 		r.sub("voice", 1);
 		return r;
 	};
-	const build = (gs, top) => {
+	// its own groups first; where it has none (copista writes the second voice
+	// only where the voices part), the other voice's, then rests
+	const build = (own, other, top) => {
 		const out = new El("measure");
 		out.attrs = measure.attrs.map(([k, v]) => [k, v]);
 		for (const el of measure.children) {
@@ -226,8 +229,11 @@ function splitMeasure(measure) {
 				out.children.push(clone(el)); // print, attributes, directions, barlines
 			}
 		}
+		const mine = [...own].sort((a, b) => a.t - b.t);
+		const covered = (g) => mine.some((h) => h.t < g.t + g.d && g.t < h.t + h.d);
+		const all = mine.concat(other.filter((g) => !covered(g))).sort((a, b) => a.t - b.t);
 		let at = 0;
-		for (const g of [...gs].sort((a, b) => a.t - b.t)) {
+		for (const g of all) {
 			if (g.t < at) {
 				continue; // overlapping (a misread): the first wins
 			}
@@ -237,6 +243,9 @@ function splitMeasure(measure) {
 			out.children.push(pick(g, top));
 			at = g.t + g.d;
 		}
+		if (at < end && all.length) {
+			out.children.push(restOf(end - at)); // to the end of the bar
+		}
 		return out;
 	};
 	const g1 = groups.filter((g) => g.voice === v1);
@@ -244,9 +253,10 @@ function splitMeasure(measure) {
 	// the lower voice: its own notes, or (silent, or absent) the upper's
 	const lowerOwn = g2 && g2.some((g) => !g.rest);
 	const upperOwn = g1.some((g) => !g.rest);
+	const empty = [];
 	return {
-		upper: build(upperOwn || !lowerOwn ? g1 : g2, true),
-		lower: build(lowerOwn ? g2 : g1, false),
+		upper: upperOwn || !lowerOwn ? build(g1, empty, true) : build(g2, empty, true),
+		lower: lowerOwn ? build(g2.filter((g) => !g.rest), g1, false) : build(g1, empty, false),
 		two: Boolean(lowerOwn && upperOwn) || chords,
 	};
 }
@@ -398,7 +408,7 @@ const SPREAD_GAP = 3; // … this far apart on average (copista writes stray sec
  * Page part j → score part index (or -1: a new part), in order, at the least
  * total unlikeness (an alignment: parts never swap places).
  */
-function matchParts(old, page, recent = [], spread = true) {
+function matchParts(old, page, recent = [], spread = true, wasSpread = []) {
 	const I = old.length;
 	const J = page.length;
 	const cost = Array.from({ length: I + 1 }, () => new Array(J + 1).fill(Infinity));
@@ -441,8 +451,11 @@ function matchParts(old, page, recent = [], spread = true) {
 			// score parts that had a staff each
 			if (
 				spread && i + 1 < I && j < J && page[j].staves === 1 && old[i].staves === 1 && old[i + 1].staves === 1 &&
-				page[j].two >= SPREAD_MIN && page[j].hi !== null && page[j].lo !== null &&
-				page[j].hi - page[j].lo >= SPREAD_GAP && old[i].two < 0.5 && old[i + 1].two < 0.5 &&
+				page[j].hi !== null && page[j].lo !== null &&
+				// two voices well apart, or the same staff shared out on the page
+				// before (in unison now: soprano and alto sing the same line)
+				((page[j].two >= SPREAD_MIN && page[j].hi - page[j].lo >= SPREAD_GAP) || wasSpread[i]) &&
+				old[i].two < 0.5 && old[i + 1].two < 0.5 &&
 				old[i].mean !== null && old[i + 1].mean !== null
 			) {
 				const hiSig = { ...page[j], mean: page[j].hi };
@@ -633,6 +646,7 @@ export function joinTrees(trees, { spread = true } = {}) {
 	let nextId = parts.length;
 	let setAside = 0;
 	let prevCount = measures;
+	let lastUpper = new Set(); // upper parts of two-voice staves shared out on the page before
 	for (const tree of trees.slice(1)) {
 		const pageParts = partsOf(tree);
 		// a page of one staff only, many bars long, after pages of a choir: an
@@ -653,7 +667,8 @@ export function joinTrees(trees, { spread = true } = {}) {
 			const ms = childrenOf(part, "measure");
 			return ms.slice(Math.max(0, ms.length - prevCount)).some(hasNotes);
 		});
-		const plan = matchParts(sigs, pageSigs, recent, spread);
+		const wasSpread = parts.map((part) => lastUpper.has(part));
+		const plan = matchParts(sigs, pageSigs, recent, spread, wasSpread);
 		// score parts that are the two staves of one part (seen whole on this page):
 		// put back together first, from the last, shifting the plan's indices
 		const merges = plan.filter((p) => p.merge !== undefined).map((p) => p.to).sort((a, b) => b - a);
@@ -770,6 +785,7 @@ export function joinTrees(trees, { spread = true } = {}) {
 		});
 		measures += count;
 		prevCount = count;
+		lastUpper = new Set([...role].filter(([, r]) => r === "upper").map(([p]) => p));
 	}
 	mergeFragments(root, plist, parts);
 	dropEmptyBars(parts);
