@@ -1056,8 +1056,14 @@ async function renderScore(){
   try{
     await loadOsmdLib();
     const shownTitle=$("#title").textContent||""; const hasTitle=!!shownTitle.trim() && !GENERIC_TITLE.test(shownTitle.trim());
-    osmd=new opensheetmusicdisplay.OpenSheetMusicDisplay("osmd",{autoResize:true,backend:"svg",drawTitle:hasTitle,drawSubtitle:hasTitle,drawPartNames:true,followCursor:false});
-    await osmd.load(displayXml(S.xml, S.tracks, shownTitle)); osmd.render();
+    // écran étroit (téléphone) : partition réduite à la largeur, noms des parties abrégés
+    const w=$("#osmd").clientWidth||800, narrow=w<600;
+    osmd=new opensheetmusicdisplay.OpenSheetMusicDisplay("osmd",{autoResize:true,backend:"svg",drawTitle:hasTitle,drawSubtitle:hasTitle,drawPartNames:true,drawPartAbbreviations:true,followCursor:false});
+    if(narrow) osmd.EngravingRules.PageLeftMargin=osmd.EngravingRules.PageRightMargin=1;
+    await osmd.load(displayXml(S.xml, S.tracks, shownTitle));
+    osmd.zoom=narrow?Math.max(0.45,Math.min(1,w/760)):1;
+    if(narrow) for(const ip of osmd.Sheet.Instruments) ip.NameLabel.text=ip.NameLabel.text.split(/\s*\/\s*/).map(x=>x.slice(0,1)).join("");
+    osmd.render();
     osmd.cursor.show();
     // inventaire des positions du curseur : (mesure, position en noires dans la mesure)
     osmdSteps=[]; const c=osmd.cursor; c.reset(); let guard=0;
