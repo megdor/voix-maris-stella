@@ -312,9 +312,20 @@ function markHyphens(texts, segs = []) {
 	const isHy = (t) => /^[-–]+$/.test(t.str);
 	for (const line of lines.values()) {
 		line.sort((a, b) => a.x - b.x);
+		// tiret collé au début de la syllabe suivante (« -tain ») : il appartient à la coupure précédente
+		for (const t of line) {
+			if (/^[-–]\p{L}/u.test(t.str)) {
+				t.str = t.str.replace(/^[-–]+/, "");
+				t.x = t.cx?.[1] ?? t.x;
+				t.cx = t.cx?.slice(1);
+				t.hypBefore = true;
+				t.lead = true;
+			}
+		}
 		for (let i = 0; i < line.length; i++) {
 			const t = line[i];
 			if (isHy(t) || !/\p{L}/u.test(t.str)) continue;
+			if (line[i + 1]?.lead) t.hypAfter = true;
 			const next = line[i + 1];
 			const prev = line[i - 1];
 			if (/[-–]$/.test(t.str) || (next && isHy(next) && next.x - t.x1 < 4 * t.size)) t.hypAfter = true;
@@ -336,20 +347,30 @@ function markHyphens(texts, segs = []) {
 	return texts;
 }
 
+const chars0 = (t) => [...t.str];
+
 function mergeTexts(runs) {
 	const rs = [...runs].sort((a, b) => a.y - b.y || a.x - b.x);
 	const out = [];
 	for (const r of rs) {
 		const last = out[out.length - 1];
 		const x1 = r.x1 ?? r.x + 0.5 * r.size;
-		if (last && last.font === r.font && Math.abs(last.y - r.y) < 0.3 && r.x - last.x1 < 0.15 * r.size && r.x >= last.x1 - 0.5 && !/\s$/.test(last.str) && !/^\s/.test(r.str)) {
+		// position de chaque lettre (estimée régulière dans un morceau)
+		const cx = [...r.str].map((_, i, a) => r.x + ((x1 - r.x) * i) / Math.max(1, a.length));
+		if (last && last.font === r.font && Math.abs(last.y - r.y) < 0.3 && r.x - last.x1 < 0.15 * r.size && r.x >= last.x1 - 0.5 && !/\s$/.test(last.str) && !/^\s/.test(r.str) && !/[-–]$/.test(last.str)) {
+			last.cut.push(last.cx.length); // jonction entre deux morceaux de texte d'origine
 			last.str += r.str;
 			last.x1 = x1;
-		} else out.push({ ...r, x1 });
+			last.cx.push(...cx);
+		} else out.push({ ...r, x1, cx, cut: [] });
 	}
 	return out.flatMap((r) => {
 		// une suite contenant des espaces : un mot par morceau (position estimée)
-		if (!/\s/.test(r.str.trim())) return r.str.trim() ? [{ ...r, str: r.str.trim() }] : [];
+		if (!/\s/.test(r.str.trim())) {
+			if (!r.str.trim()) return [];
+			const lead = r.str.length - r.str.trimStart().length;
+			return [{ ...r, str: r.str.trim(), cx: r.cx.slice(lead, lead + r.str.trim().length), cut: r.cut.map((c) => c - lead) }];
+		}
 		const parts = r.str.split(/(\s+)/);
 		const per = (r.x1 - r.x) / Math.max(1, r.str.length);
 		let x = r.x;
@@ -930,6 +951,34 @@ export function readPage(raw, state = { keys: [], times: null }) {
 			lyr[k].push({ ...t, str });
 		}
 		// couplets : une ligne de paroles par couplet, numérotées de haut en bas sur tout le système
+		// deux syllabes collées dans la gravure (« mestes ») : le mot n'est centré sous aucune note mais en
+		// couvre deux ; on le coupe entre les deux notes, à la lettre la plus proche du milieu
+		lyr.forEach((L, k) => {
+			const cs = [...new Set(chords.filter((c) => c.k === k).map((c) => Math.round((c.heads[0].x + c.heads[0].w / 2) * 2) / 2))].sort((a, b) => a - b);
+			for (let i = 0; i < L.length; i++) {
+				const t = L[i];
+				if (!t.cx || t.cx.length !== [...t.str].length || t.str.length < 4) continue;
+				const mid = (t.x + t.x1) / 2;
+				if (cs.some((c) => Math.abs(c - mid) < 0.8 * sp)) continue;
+				const inside = cs.filter((c) => c > t.x - 0.2 * sp && c < t.x1 + 0.2 * sp);
+				if (inside.length < 2) continue;
+				const cut = (inside[0] + inside[1]) / 2;
+				// coupure seulement à une jonction entre morceaux d'origine (un mot écrit d'un bloc reste entier)
+				const js = (t.cut ?? []).filter((c) => c > 0 && c < t.cx.length);
+				if (!js.length) continue;
+				const j = js.reduce((bj, jj) => (Math.abs(t.cx[jj] - cut) < Math.abs(t.cx[bj] - cut) ? jj : bj), js[0]);
+				// chaque moitié doit être centrée sous sa propre note (sinon : une syllabe un peu décentrée)
+				if (Math.abs((t.x + t.cx[j]) / 2 - inside[0]) > sp || Math.abs((t.cx[j] + t.x1) / 2 - inside[1]) > sp) continue;
+				// et chaque moitié est une syllabe : elle contient une voyelle
+				const V = /[aeiouyàâäéèêëîïôöùûüœæáíóúý]/i;
+				if (!V.test(chars0(t).slice(0, j).join("")) || !V.test(chars0(t).slice(j).join(""))) continue;
+				const chars = [...t.str];
+				// pas de tiret à la coupure : la 1re garde le début du mot collé, la 2de sa fin
+				const a = { ...t, str: chars.slice(0, j).join(""), x1: t.cx[j], cx: t.cx.slice(0, j), cut: t.cut.filter((c) => c < j), hypAfter: false };
+				const b = { ...t, str: chars.slice(j).join(""), x: t.cx[j], cx: t.cx.slice(j), cut: t.cut.filter((c) => c > j).map((c) => c - j), hypBefore: false };
+				L.splice(i, 1, a, b);
+			}
+		});
 		for (const L of lyr) {
 			const ys = cluster(L.map((l) => l.y), 0.6 * sp);
 			for (const l of L) l.verse = ys.findIndex((c) => c.includes(l.y)) + 1;
@@ -1295,7 +1344,9 @@ export function systemTrees(page, ctx) {
 									if (h.tieStop) no.sub("tied", null, { type: "stop" });
 									if (h.tieStart) no.sub("tied", null, { type: "start" });
 								}
-								const near = (l) => Math.abs(l.x + (l.x1 - l.x) / 2 - (h.x + h.w / 2)) < 1.8 * sp;
+								const hc = h.x + h.w / 2;
+								// mot large étalé sur plusieurs notes (Encore) : rattaché à la note sous son début
+								const near = (l) => Math.abs(l.x + (l.x1 - l.x) / 2 - hc) < 1.8 * sp || (l.x1 - l.x > 3 * sp && hc > l.x - 0.8 * sp && hc < l.x + 1.5 * sp);
 								// la syllabe va à la 1re voix ; à une autre voix seulement si la 1re n'a pas de note là
 								const v0has = (l) => (voices[0]?.evs ?? []).some((q) => q.heads?.length && Math.abs(l.x + (l.x1 - l.x) / 2 - (q.heads[0].x + q.heads[0].w / 2)) < 1.8 * sp);
 								if (j === 0 && (vi === 0 || lyrics.some((l) => !l.used && near(l) && !v0has(l)))) {
