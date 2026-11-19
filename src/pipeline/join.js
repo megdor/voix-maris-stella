@@ -106,7 +106,149 @@ function signature(part) {
 			}
 		}
 	}
-	return { staves, clefs, mean: n ? sum / n : null };
+	const two = twoVoices(part);
+	return { staves, clefs, mean: n ? sum / n : null, ...two };
+}
+
+const midiOf = (note) => {
+	const p = childrenOf(note, "pitch")[0];
+	if (!p) {
+		return null;
+	}
+	const step = childrenOf(p, "step")[0]?.text;
+	const octave = Number(childrenOf(p, "octave")[0]?.text);
+	const alter = Number(childrenOf(p, "alter")[0]?.text ?? 0);
+	return step in STEP && Number.isFinite(octave) ? 12 * (octave + 1) + STEP[step] + alter : null;
+};
+
+/**
+ * A one-staff part with two voices on it (Chœur Maris Stella : « C. A. »,
+ * soprano et alto sur une portée, en voix 1 / voix 2 ou en accords) : the
+ * share of its sung bars with two voices, and the mean pitch of the upper and
+ * of the lower one (a bar of one voice counts for both).
+ */
+function twoVoices(part) {
+	let bars = 0;
+	let twoBars = 0;
+	let hi = 0;
+	let lo = 0;
+	let nh = 0;
+	let nl = 0;
+	for (const m of childrenOf(part, "measure")) {
+		const { upper, lower, two } = splitMeasure(m);
+		const ups = upper.children.map(midiOf).filter((x) => x !== null);
+		const los = lower.children.map(midiOf).filter((x) => x !== null);
+		if (!ups.length && !los.length) {
+			continue;
+		}
+		bars++;
+		if (two) {
+			twoBars++;
+		}
+		for (const x of ups) {
+			hi += x;
+			nh++;
+		}
+		for (const x of los) {
+			lo += x;
+			nl++;
+		}
+	}
+	return {
+		two: bars ? twoBars / bars : 0,
+		hi: nh ? hi / nh : null,
+		lo: nl ? lo / nl : null,
+	};
+}
+
+/**
+ * A measure of a two-voice staff as two one-voice measures: voice 1 (or the
+ * top note of a chord) above, voice 2 (or the bottom note) below; a passage of
+ * one voice only, both sing it. Directions, attributes and barlines go to both.
+ */
+function splitMeasure(measure) {
+	// notes with their start time and voice; a chord is one group
+	const groups = [];
+	let t = 0;
+	let last = null;
+	for (const el of measure.children) {
+		if (el.tag === "note") {
+			if (childrenOf(el, "grace").length) {
+				continue;
+			}
+			const d = Number(childrenOf(el, "duration")[0]?.text ?? 0);
+			if (childrenOf(el, "chord").length && last) {
+				last.notes.push(el);
+				continue;
+			}
+			const voice = childrenOf(el, "voice")[0]?.text ?? "1";
+			last = { t, d, voice, notes: [el], rest: childrenOf(el, "rest").length > 0 };
+			groups.push(last);
+			t += d;
+		} else if (el.tag === "backup") {
+			t -= Number(childrenOf(el, "duration")[0]?.text ?? 0);
+			last = null;
+		} else if (el.tag === "forward") {
+			t += Number(childrenOf(el, "duration")[0]?.text ?? 0);
+			last = null;
+		}
+	}
+	const voices = [...new Set(groups.filter((g) => !g.rest).map((g) => g.voice))].sort();
+	const v1 = voices[0] ?? "1";
+	const v2 = voices[1] ?? null;
+	const chords = groups.some((g) => g.notes.length > 1 && g.voice === v1);
+	const pick = (g, top) => {
+		const sounding = g.notes.filter((n) => midiOf(n) !== null);
+		if (!sounding.length) {
+			return clone(g.notes[0]);
+		}
+		const best = sounding.reduce((a, b) => ((midiOf(b) > midiOf(a)) === top ? b : a));
+		const c = clone(best);
+		c.children = c.children.filter((k) => k.tag !== "chord");
+		const v = c.children.find((k) => k.tag === "voice");
+		if (v) {
+			v.text = "1";
+		}
+		return c;
+	};
+	const restOf = (d) => {
+		const r = new El("note");
+		r.sub("rest");
+		r.sub("duration", d);
+		r.sub("voice", 1);
+		return r;
+	};
+	const build = (gs, top) => {
+		const out = new El("measure");
+		out.attrs = measure.attrs.map(([k, v]) => [k, v]);
+		for (const el of measure.children) {
+			if (!["note", "backup", "forward"].includes(el.tag)) {
+				out.children.push(clone(el)); // print, attributes, directions, barlines
+			}
+		}
+		let at = 0;
+		for (const g of [...gs].sort((a, b) => a.t - b.t)) {
+			if (g.t < at) {
+				continue; // overlapping (a misread): the first wins
+			}
+			if (g.t > at) {
+				out.children.push(restOf(g.t - at));
+			}
+			out.children.push(pick(g, top));
+			at = g.t + g.d;
+		}
+		return out;
+	};
+	const g1 = groups.filter((g) => g.voice === v1);
+	const g2 = v2 === null ? null : groups.filter((g) => g.voice === v2);
+	// the lower voice: its own notes, or (silent, or absent) the upper's
+	const lowerOwn = g2 && g2.some((g) => !g.rest);
+	const upperOwn = g1.some((g) => !g.rest);
+	return {
+		upper: build(upperOwn || !lowerOwn ? g1 : g2, true),
+		lower: build(lowerOwn ? g2 : g1, false),
+		two: Boolean(lowerOwn && upperOwn) || chords,
+	};
 }
 
 /** How unlike two parts are (0: alike). */
@@ -247,12 +389,16 @@ function pairMeasures(upper, lower) {
 }
 const NEW_PART = 40; // a part first met on this page
 const CONTINUE = 12; // a part heard on the page before (a voice goes on)
+const SPREAD = 8; // a two-voice staff shared out between two score parts
+const SPREAD_MIN = 0.3; // … when at least this share of its bars has two voices
+const SPREAD_GAP = 3; // … this far apart on average (copista writes stray second voices),
+// shared out between two one-voice parts (not an instrument's staff)
 
 /**
  * Page part j → score part index (or -1: a new part), in order, at the least
  * total unlikeness (an alignment: parts never swap places).
  */
-function matchParts(old, page, recent = []) {
+function matchParts(old, page, recent = [], spread = true) {
 	const I = old.length;
 	const J = page.length;
 	const cost = Array.from({ length: I + 1 }, () => new Array(J + 1).fill(Infinity));
@@ -291,6 +437,23 @@ function matchParts(old, page, recent = []) {
 					move[i + 1][j + 2] = "pair";
 				}
 			}
+			// a two-voice staff of the page (soprano and alto on one staff) = two
+			// score parts that had a staff each
+			if (
+				spread && i + 1 < I && j < J && page[j].staves === 1 && old[i].staves === 1 && old[i + 1].staves === 1 &&
+				page[j].two >= SPREAD_MIN && page[j].hi !== null && page[j].lo !== null &&
+				page[j].hi - page[j].lo >= SPREAD_GAP && old[i].two < 0.5 && old[i + 1].two < 0.5 &&
+				old[i].mean !== null && old[i + 1].mean !== null
+			) {
+				const hiSig = { ...page[j], mean: page[j].hi };
+				const loSig = { ...page[j], mean: page[j].lo };
+				const v = c + SPREAD + unlike(old[i], hiSig) + unlike(old[i + 1], loSig) -
+					(recent[i] ? CONTINUE : 0) - (recent[i + 1] ? CONTINUE : 0);
+				if (v < cost[i + 2][j + 1]) {
+					cost[i + 2][j + 1] = v;
+					move[i + 2][j + 1] = "spread";
+				}
+			}
 			// the other way round: a piano read as two parts on the earlier pages,
 			// found whole (two staves) on this one
 			if (!hasGrand && i + 1 < I && j < J && old[i].staves === 1 && old[i + 1].staves === 1 && page[j].staves === 2) {
@@ -311,6 +474,10 @@ function matchParts(old, page, recent = []) {
 		if (mv === "match") {
 			out[j - 1] = { to: i - 1 };
 			i--;
+			j--;
+		} else if (mv === "spread") {
+			out[j - 1] = { to: i - 2, spread: i - 1 };
+			i -= 2;
 			j--;
 		} else if (mv === "unpair") {
 			out[j - 1] = { to: i - 2, merge: i - 1 };
@@ -441,7 +608,7 @@ function dropEmptyBars(parts) {
 	}
 }
 
-export function joinTrees(trees) {
+export function joinTrees(trees, { spread = true } = {}) {
 	if (trees.length === 0) {
 		return new El("score-partwise", { version: "4.0" });
 	}
@@ -486,7 +653,7 @@ export function joinTrees(trees) {
 			const ms = childrenOf(part, "measure");
 			return ms.slice(Math.max(0, ms.length - prevCount)).some(hasNotes);
 		});
-		const plan = matchParts(sigs, pageSigs, recent);
+		const plan = matchParts(sigs, pageSigs, recent, spread);
 		// score parts that are the two staves of one part (seen whole on this page):
 		// put back together first, from the last, shifting the plan's indices
 		const merges = plan.filter((p) => p.merge !== undefined).map((p) => p.to).sort((a, b) => b - a);
@@ -498,6 +665,9 @@ export function joinTrees(trees) {
 				}
 				if (p.before !== undefined && p.before > a) {
 					p.before--;
+				}
+				if (p.spread !== undefined && p.spread > a) {
+					p.spread--;
 				}
 				if (p.to === a) {
 					delete p.merge;
@@ -516,9 +686,15 @@ export function joinTrees(trees) {
 			}
 		});
 		const pageOf = new Map(); // score part (object) → page part index
+		const role = new Map(); // score part → "upper" / "lower" of a two-voice staff
 		plan.forEach((p, j) => {
 			if ("to" in p) {
 				pageOf.set(parts[p.to], j);
+				if (p.spread !== undefined) {
+					pageOf.set(parts[p.spread], j);
+					role.set(parts[p.to], "upper");
+					role.set(parts[p.spread], "lower");
+				}
 			}
 		});
 		for (const [j, before] of fresh.reverse()) {
@@ -560,7 +736,16 @@ export function joinTrees(trees) {
 		parts.forEach((part, n) => {
 			const j = pageOf.get(part);
 			const pairWith = j !== undefined ? plan[j].pair : undefined;
-			const sig = j === undefined ? null : pairWith !== undefined ? pairSig(pageSigs[j], pageSigs[pairWith]) : pageSigs[j];
+			const half = role.get(part);
+			const sig = j === undefined
+				? null
+				: pairWith !== undefined
+					? pairSig(pageSigs[j], pageSigs[pairWith])
+					: half
+						? pageSigs[j].two >= 0.5
+							? { ...pageSigs[j], mean: half === "upper" ? pageSigs[j].hi : pageSigs[j].lo, two: 0 }
+							: null // mostly in unison: the two parts keep their look
+						: pageSigs[j];
 			if (sig && sig.mean !== null) {
 				sigs[n] = sig; // its look on its latest page
 			}
@@ -568,7 +753,9 @@ export function joinTrees(trees) {
 				? []
 				: pairWith !== undefined
 					? pairMeasures(pageParts[j], pageParts[pairWith])
-					: childrenOf(pageParts[j], "measure").map(clone);
+					: half
+						? childrenOf(pageParts[j], "measure").map((m) => splitMeasure(m)[half])
+						: childrenOf(pageParts[j], "measure").map(clone);
 			for (let i = 0; i < count; i++) {
 				const m = pageMeasures[i] ?? new El("measure");
 				if (i === 0) {
