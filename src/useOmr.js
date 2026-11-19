@@ -34,6 +34,7 @@ import {
 	putScore,
 } from "./library.js";
 import { imagesFromPhotos, titleFromFileName } from "./photos.js";
+import { deskewQuad } from "./pipeline/capture/deskew.js";
 import { fullQuad } from "./pipeline/capture/index.js";
 import {
 	detectPageCorners,
@@ -206,8 +207,24 @@ export function useOmr() {
 		pages.value = [...pages.value, ...added];
 		for (const p of added) {
 			// page de PDF : utilisée entière, sans recadrage automatique
-			detecting = detecting.then(() => (p.captureState === "flat" ? refreshPage(p) : detectCorners(p)));
+			detecting = detecting.then(() => (p.captureState === "flat" ? straighten(p) : detectCorners(p)));
 		}
+	}
+
+	/** Page de PDF scannée de travers : redressée d'après ses portées (sans recadrage). */
+	async function straighten(p) {
+		if (!pages.value.includes(p)) {
+			return;
+		}
+		try {
+			const q = deskewQuad(p.image);
+			if (q) {
+				p.quad = q;
+			}
+		} catch (e) {
+			console.error(e);
+		}
+		await refreshPage(p);
 	}
 
 	async function detectCorners(p) {
