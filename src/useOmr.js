@@ -448,7 +448,9 @@ export function useOmr() {
 		} catch (e) {
 			if (run === recognitionRun) {
 				console.error(e);
-				error.value = e.message;
+				error.value = /dynamically imported module|Importing a module script failed/i.test(e.message)
+					? "Le site vient d'être mis à jour : la page se recharge, puis redéposez la partition."
+					: e.message;
 			}
 		} finally {
 			if (run === recognitionRun) {
