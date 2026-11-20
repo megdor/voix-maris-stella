@@ -506,12 +506,19 @@ function marginFurniture(mask, staves) {
 	if (!zones.length) {
 		return null;
 	}
-	let any = false;
 	for (let x = 0; x < right; x++) {
 		out[x] = Math.max(...zones.map(([y0, y1]) => inkRun(mask, x, y0, y1)));
-		any ||= out[x] >= 0.3;
 	}
-	return any ? out : null;
+	// only a wide band (a binding) right by the staves' starts; a thin scanner
+	// edge further out changes nothing (Nowowiejski: the organ kept whole)
+	const pageLeft = Math.min(...staves.map((st) => st.x0));
+	let wide = 0;
+	for (let x = Math.max(0, Math.trunc(pageLeft - 4 * sp)); x < Math.min(right, pageLeft + sp); x++) {
+		if (out[x] >= 0.5) {
+			wide++;
+		}
+	}
+	return wide >= 0.5 * sp ? out : null;
 }
 
 function paleLine(levels, paper, darkLevel, a, b, pageLeft, furniture = null) {
