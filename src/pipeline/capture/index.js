@@ -2,6 +2,7 @@
 // flattened and cleaned like a scan. Corners come from DocAligner (see
 // docaligner.js, run by the worker) or from the user's handles.
 
+import { dewarpPage } from "./dewarp.js";
 import { enhancePage } from "./enhance.js";
 import { flatSize, warpQuad } from "./warp.js";
 
@@ -28,5 +29,7 @@ export function flattenAndClean(
 ) {
 	const size = flatSize(quad, image.width, image.height);
 	const flat = warpQuad(image, quad, size.width, size.height);
-	return strength === null ? flat : enhancePage(flat, { strength, lighting });
+	const page = strength === null ? flat : enhancePage(flat, { strength, lighting });
+	// portées courbées (reliure, page photographiée) : remises droites
+	return dewarpPage(page) ?? page;
 }
