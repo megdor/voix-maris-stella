@@ -451,13 +451,16 @@ function leftSpan(a, b, pageLeft, lines = false) {
 	];
 }
 
-function inkLinks(mask, syms, a, b, pageLeft) {
+function inkLinks(mask, syms, a, b, pageLeft, furniture = null) {
 	const sp = (a.sp + b.sp) / 2;
 	const y0 = a.y1 + 1;
 	const y1 = b.y0 - 1;
 	const [lo, hi] = leftSpan(a, b, pageLeft);
 	let left = 0;
 	for (let x = Math.max(0, lo); x <= hi; x += 2) {
+		if (furniture?.[x]) {
+			continue;
+		}
 		left = Math.max(left, inkRun(mask, x, y0, y1));
 	}
 	const lines = syms.filter(
@@ -477,7 +480,43 @@ function inkLinks(mask, syms, a, b, pageLeft) {
 	return [left, bars];
 }
 
-function paleLine(levels, paper, darkLevel, a, b, pageLeft) {
+// Chœur Maris Stella : la reliure d'une photocopie (spirale), le bord noir
+// d'un scan : de l'encre dans la marge, sur toute la hauteur de la page. Entre
+// deux portées elle passerait pour le trait qui réunit un système : toute la
+// page devenait un seul système (Arnesen, Et misericordia : 11 portées en 1
+// système). Colonnes encrées aussi au-dessus de la 1re portée ou sous la
+// dernière : du décor, pas un trait de système.
+function marginFurniture(mask, staves) {
+	const W = mask.width;
+	const H = mask.height;
+	const sp = staves[0].sp;
+	const top = staves[0].y0 - 2 * sp;
+	const bottom = staves.at(-1).y1 + 2 * sp;
+	const right = Math.min(W, Math.trunc(Math.max(...staves.map((st) => st.x0)) + 2 * sp));
+	const out = new Uint8Array(W);
+	const zones = [];
+	if (top >= 4 * sp) {
+		zones.push([sp, top]);
+	}
+	if (H - bottom >= 4 * sp) {
+		zones.push([bottom, H - sp]);
+	}
+	if (!zones.length) {
+		return null;
+	}
+	for (let x = 0; x < right; x++) {
+		if (zones.some(([y0, y1]) => inkRun(mask, x, y0, y1) >= 0.5)) {
+			for (let d = -2; d <= 2; d++) {
+				if (x + d >= 0 && x + d < W) {
+					out[x + d] = 1;
+				}
+			}
+		}
+	}
+	return out;
+}
+
+function paleLine(levels, paper, darkLevel, a, b, pageLeft, furniture = null) {
 	const { data, width: W, height: H } = levels;
 	const ya = Math.max(0, pyRound(a.y1 + 1));
 	const yb = Math.min(H, pyRound(b.y0 - 1));
@@ -503,6 +542,9 @@ function paleLine(levels, paper, darkLevel, a, b, pageLeft) {
 	const away = Math.max(3, pyRound((a.sp + b.sp) / 2));
 	let best = 0;
 	for (let x = Math.max(away + 1, lo); x <= Math.min(W - away - 1, hi); x++) {
+		if (furniture?.[x]) {
+			continue;
+		}
 		const run = runOver(x - 1, x + 2);
 		if (
 			run > best &&
@@ -564,11 +606,12 @@ function buildSystems(syms, staves, mask, ink, levels, linksModel, forced) {
 	}
 	if (mask && staves.length > 1) {
 		const pageLeft = Math.min(...staves.map((st) => st.x0));
+		const furniture = marginFurniture(mask, staves);
 		let tone = null;
 		for (let k = 1; k < staves.length; k++) {
 			const a = staves[k - 1];
 			const b = staves[k];
-			const [left, bars] = inkLinks(mask, syms, a, b, pageLeft);
+			const [left, bars] = inkLinks(mask, syms, a, b, pageLeft, furniture);
 			let line = 0;
 			if (left < INK_LINK && bars < 0.5) {
 				line = openingLine(mask, a, b, pageLeft);
@@ -579,7 +622,7 @@ function buildSystems(syms, staves, mask, ink, levels, linksModel, forced) {
 					];
 					line = Math.max(
 						line,
-						paleLine(levels, tone[0], tone[1], a, b, pageLeft),
+						paleLine(levels, tone[0], tone[1], a, b, pageLeft, furniture),
 					);
 				}
 			}
