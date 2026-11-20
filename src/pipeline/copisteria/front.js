@@ -458,10 +458,10 @@ function inkLinks(mask, syms, a, b, pageLeft, furniture = null) {
 	const [lo, hi] = leftSpan(a, b, pageLeft);
 	let left = 0;
 	for (let x = Math.max(0, lo); x <= hi; x += 2) {
-		if (furniture?.[x]) {
-			continue;
-		}
-		left = Math.max(left, inkRun(mask, x, y0, y1));
+		const run = inkRun(mask, x, y0, y1);
+		// what the margin already holds in this column does not link the staves
+		const bg = furniture ? Math.min(0.95, furniture[x]) : 0;
+		left = Math.max(left, bg > 0 ? Math.max(0, (run - bg) / (1 - bg)) : run);
 	}
 	const lines = syms.filter(
 		(s) =>
@@ -484,8 +484,8 @@ function inkLinks(mask, syms, a, b, pageLeft, furniture = null) {
 // d'un scan : de l'encre dans la marge, sur toute la hauteur de la page. Entre
 // deux portées elle passerait pour le trait qui réunit un système : toute la
 // page devenait un seul système (Arnesen, Et misericordia : 11 portées en 1
-// système). Colonnes encrées aussi au-dessus de la 1re portée ou sous la
-// dernière : du décor, pas un trait de système.
+// système). Part d'encre de chaque colonne au-dessus de la 1re portée ou sous
+// la dernière : ce décor est retranché de ce qui relie deux portées.
 function marginFurniture(mask, staves) {
 	const W = mask.width;
 	const H = mask.height;
@@ -493,7 +493,7 @@ function marginFurniture(mask, staves) {
 	const top = staves[0].y0 - 2 * sp;
 	const bottom = staves.at(-1).y1 + 2 * sp;
 	const right = Math.min(W, Math.trunc(Math.max(...staves.map((st) => st.x0)) + 2 * sp));
-	const out = new Uint8Array(W);
+	const out = new Float32Array(W);
 	const zones = [];
 	if (top >= 4 * sp) {
 		zones.push([sp, top]);
@@ -504,16 +504,12 @@ function marginFurniture(mask, staves) {
 	if (!zones.length) {
 		return null;
 	}
+	let any = false;
 	for (let x = 0; x < right; x++) {
-		if (zones.some(([y0, y1]) => inkRun(mask, x, y0, y1) >= 0.5)) {
-			for (let d = -2; d <= 2; d++) {
-				if (x + d >= 0 && x + d < W) {
-					out[x + d] = 1;
-				}
-			}
-		}
+		out[x] = Math.max(...zones.map(([y0, y1]) => inkRun(mask, x, y0, y1)));
+		any ||= out[x] >= 0.3;
 	}
-	return out;
+	return any ? out : null;
 }
 
 function paleLine(levels, paper, darkLevel, a, b, pageLeft, furniture = null) {
@@ -542,7 +538,7 @@ function paleLine(levels, paper, darkLevel, a, b, pageLeft, furniture = null) {
 	const away = Math.max(3, pyRound((a.sp + b.sp) / 2));
 	let best = 0;
 	for (let x = Math.max(away + 1, lo); x <= Math.min(W - away - 1, hi); x++) {
-		if (furniture?.[x]) {
+		if (furniture && furniture[x] >= 0.5) {
 			continue;
 		}
 		const run = runOver(x - 1, x + 2);
