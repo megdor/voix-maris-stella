@@ -457,8 +457,10 @@ function inkLinks(mask, syms, a, b, pageLeft, furniture = null) {
 	const y1 = b.y0 - 1;
 	const [lo, hi] = leftSpan(a, b, pageLeft);
 	let left = 0;
+	let raw = 0;
 	for (let x = Math.max(0, lo); x <= hi; x += 2) {
 		const run = inkRun(mask, x, y0, y1);
+		raw = Math.max(raw, run);
 		// what the margin already holds in this column does not link the staves
 		const bg = furniture ? Math.min(0.95, furniture[x]) : 0;
 		left = Math.max(left, bg > 0 ? Math.max(0, (run - bg) / (1 - bg)) : run);
@@ -477,7 +479,7 @@ function inkLinks(mask, syms, a, b, pageLeft, furniture = null) {
 		? lines.filter((s) => inkRun(mask, s.cx, y0, y1) >= INK_LINK).length /
 			lines.length
 		: 0;
-	return [left, bars];
+	return [left, bars, raw];
 }
 
 // Chœur Maris Stella : la reliure d'une photocopie (spirale), le bord noir
@@ -607,7 +609,10 @@ function buildSystems(syms, staves, mask, ink, levels, linksModel, forced) {
 		for (let k = 1; k < staves.length; k++) {
 			const a = staves[k - 1];
 			const b = staves[k];
-			const [left, bars] = inkLinks(mask, syms, a, b, pageLeft, furniture);
+			const [left, bars, raw] = inkLinks(mask, syms, a, b, pageLeft, furniture);
+			// ink there, but no more than in the margin: the ink cannot tell, the
+			// other clues (brace, bar lines in line) decide
+			const blurred = raw >= INK_LINK && left < INK_LINK;
 			let line = 0;
 			if (left < INK_LINK && bars < 0.5) {
 				line = openingLine(mask, a, b, pageLeft);
@@ -624,7 +629,7 @@ function buildSystems(syms, staves, mask, ink, levels, linksModel, forced) {
 			}
 			if (left >= INK_LINK || line >= INK_LINK || bars >= 0.5) {
 				decided[k - 1] = true;
-			} else if (left < INK_SPLIT && bars < 0.1) {
+			} else if (left < INK_SPLIT && bars < 0.1 && !blurred) {
 				decided[k - 1] = false;
 			} else if (braced(syms, a, b)) {
 				decided[k - 1] = true;
