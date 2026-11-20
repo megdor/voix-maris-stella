@@ -451,14 +451,19 @@ function leftSpan(a, b, pageLeft, lines = false) {
 	];
 }
 
-function inkLinks(mask, syms, a, b, pageLeft) {
+function inkLinks(mask, syms, a, b, pageLeft, furniture = null) {
 	const sp = (a.sp + b.sp) / 2;
 	const y0 = a.y1 + 1;
 	const y1 = b.y0 - 1;
 	const [lo, hi] = leftSpan(a, b, pageLeft);
 	let left = 0;
+	let raw = 0;
 	for (let x = Math.max(0, lo); x <= hi; x += 2) {
-		left = Math.max(left, inkRun(mask, x, y0, y1));
+		const run = inkRun(mask, x, y0, y1);
+		raw = Math.max(raw, run);
+		// what the margin already holds in this column does not link the staves
+		const bg = furniture ? Math.min(0.95, furniture[x]) : 0;
+		left = Math.max(left, bg > 0 ? Math.max(0, (run - bg) / (1 - bg)) : run);
 	}
 	const lines = syms.filter(
 		(s) =>
@@ -474,10 +479,49 @@ function inkLinks(mask, syms, a, b, pageLeft) {
 		? lines.filter((s) => inkRun(mask, s.cx, y0, y1) >= INK_LINK).length /
 			lines.length
 		: 0;
-	return [left, bars];
+	return [left, bars, raw];
 }
 
-function paleLine(levels, paper, darkLevel, a, b, pageLeft) {
+// Chœur Maris Stella : la reliure d'une photocopie (spirale), le bord noir
+// d'un scan : de l'encre dans la marge, sur toute la hauteur de la page. Entre
+// deux portées elle passerait pour le trait qui réunit un système : toute la
+// page devenait un seul système (Arnesen, Et misericordia : 11 portées en 1
+// système). Part d'encre de chaque colonne au-dessus de la 1re portée ou sous
+// la dernière : ce décor est retranché de ce qui relie deux portées.
+function marginFurniture(mask, staves) {
+	const W = mask.width;
+	const H = mask.height;
+	const sp = staves[0].sp;
+	const top = staves[0].y0 - 2 * sp;
+	const bottom = staves.at(-1).y1 + 2 * sp;
+	const right = Math.min(W, Math.trunc(Math.max(...staves.map((st) => st.x0)) + 2 * sp));
+	const out = new Float32Array(W);
+	const zones = [];
+	if (top >= 4 * sp) {
+		zones.push([sp, top]);
+	}
+	if (H - bottom >= 4 * sp) {
+		zones.push([bottom, H - sp]);
+	}
+	if (!zones.length) {
+		return null;
+	}
+	for (let x = 0; x < right; x++) {
+		out[x] = Math.max(...zones.map(([y0, y1]) => inkRun(mask, x, y0, y1)));
+	}
+	// only a wide band (a binding) right by the staves' starts; a thin scanner
+	// edge further out changes nothing (Nowowiejski: the organ kept whole)
+	const pageLeft = Math.min(...staves.map((st) => st.x0));
+	let wide = 0;
+	for (let x = Math.max(0, Math.trunc(pageLeft - 4 * sp)); x < Math.min(right, pageLeft + sp); x++) {
+		if (out[x] >= 0.5) {
+			wide++;
+		}
+	}
+	return wide >= 0.5 * sp ? out : null;
+}
+
+function paleLine(levels, paper, darkLevel, a, b, pageLeft, furniture = null) {
 	const { data, width: W, height: H } = levels;
 	const ya = Math.max(0, pyRound(a.y1 + 1));
 	const yb = Math.min(H, pyRound(b.y0 - 1));
@@ -503,6 +547,9 @@ function paleLine(levels, paper, darkLevel, a, b, pageLeft) {
 	const away = Math.max(3, pyRound((a.sp + b.sp) / 2));
 	let best = 0;
 	for (let x = Math.max(away + 1, lo); x <= Math.min(W - away - 1, hi); x++) {
+		if (furniture && furniture[x] >= 0.5) {
+			continue;
+		}
 		const run = runOver(x - 1, x + 2);
 		if (
 			run > best &&
@@ -564,11 +611,15 @@ function buildSystems(syms, staves, mask, ink, levels, linksModel, forced) {
 	}
 	if (mask && staves.length > 1) {
 		const pageLeft = Math.min(...staves.map((st) => st.x0));
+		const furniture = marginFurniture(mask, staves);
 		let tone = null;
 		for (let k = 1; k < staves.length; k++) {
 			const a = staves[k - 1];
 			const b = staves[k];
-			const [left, bars] = inkLinks(mask, syms, a, b, pageLeft);
+			const [left, bars, raw] = inkLinks(mask, syms, a, b, pageLeft, furniture);
+			// ink there, but no more than in the margin: the ink cannot tell, the
+			// other clues (brace, bar lines in line) decide
+			const blurred = raw >= INK_LINK && left < INK_LINK;
 			let line = 0;
 			if (left < INK_LINK && bars < 0.5) {
 				line = openingLine(mask, a, b, pageLeft);
@@ -579,13 +630,13 @@ function buildSystems(syms, staves, mask, ink, levels, linksModel, forced) {
 					];
 					line = Math.max(
 						line,
-						paleLine(levels, tone[0], tone[1], a, b, pageLeft),
+						paleLine(levels, tone[0], tone[1], a, b, pageLeft, furniture),
 					);
 				}
 			}
 			if (left >= INK_LINK || line >= INK_LINK || bars >= 0.5) {
 				decided[k - 1] = true;
-			} else if (left < INK_SPLIT && bars < 0.1) {
+			} else if (left < INK_SPLIT && bars < 0.1 && !blurred) {
 				decided[k - 1] = false;
 			} else if (braced(syms, a, b)) {
 				decided[k - 1] = true;
