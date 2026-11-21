@@ -10,6 +10,7 @@ import ortMjsUrl from "onnxruntime-web/ort-wasm-simd-threaded.jsep.mjs?url";
 // /public: Vite forbids importing from there)
 import ortWasmUrl from "onnxruntime-web/ort-wasm-simd-threaded.jsep.wasm?url";
 import { BUNDLED_MODELS } from "./bundled.js";
+import { checkCorners } from "./capture/corners-check.js";
 import { DOCALIGNER_FILE, detectCorners } from "./capture/docaligner.js";
 import { Sym } from "./copisteria/front.js";
 import { rgbaToGray } from "./copisteria/image.js";
@@ -476,5 +477,7 @@ export async function detectPage(image, { onProgress } = {}) {
 		throw error;
 	});
 	const session = await docAligner;
-	return detectCorners(await loadOrt(), session, image);
+	const quad = await detectCorners(await loadOrt(), session, image);
+	// un coin aberrant (photo de livret) remplacé par le coin de la feuille, quand elle se détache du fond
+	return checkCorners(image, quad);
 }
