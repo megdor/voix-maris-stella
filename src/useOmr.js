@@ -90,6 +90,14 @@ export function useOmr() {
 	const pages = ref([]);
 	const currentIndex = ref(0);
 	const page = computed(() => pages.value[currentIndex.value] ?? null);
+	// pages déposées : le site ne se recharge pas tout seul (main.js, retour sur l'onglet)
+	watch(
+		() => pages.value.length,
+		(n) => {
+			window.__voixBusy = n > 0;
+		},
+		{ immediate: true },
+	);
 
 	// In the app, each detector's models: "ready" (inside the app, or
 	// downloaded), "missing" or "downloading" (on the web, models are
@@ -466,7 +474,7 @@ export function useOmr() {
 			if (run === recognitionRun) {
 				console.error(e);
 				error.value = /dynamically imported module|Importing a module script failed/i.test(e.message)
-					? "Le site vient d'être mis à jour : la page se recharge, puis redéposez la partition."
+					? "La connexion a été interrompue (ou le site vient d'être mis à jour). Relancez la lecture : vos pages sont conservées."
 					: e.message;
 			}
 		} finally {
