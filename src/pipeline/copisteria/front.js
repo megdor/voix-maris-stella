@@ -31,6 +31,8 @@ const ASSIGN_MAX_SP = 10.0;
 const EMPTY_BAR_MAX_SP = 4.0;
 const INK_LINK = 0.85;
 const INK_SPLIT = 0.4;
+// below this, ink that touches neither staff (a bar number) links nothing
+const INK_FLOAT = 0.7;
 const STAFF_PAPER_TOL = 0.04;
 const PALE = 0.12;
 const CAND_SKIP = new Set(["measure", "barLine"]);
@@ -451,6 +453,39 @@ function leftSpan(a, b, pageLeft, lines = false) {
 	];
 }
 
+// Chœur Maris Stella : part of the gap that the ink fills from either staff
+// edge, unbroken. The line that joins a system leaves one staff (or both); a
+// bar number or a rehearsal letter printed above the next system floats in
+// the gap, touching neither (Rossini, Petite messe : « 22 » au-dessus du
+// 2e système, 42 % de l'intervalle, et deux systèmes lus comme un seul).
+function anchoredRun(mask, x, y0, y1, reach = 2) {
+	const { data, width: W, height: H } = mask;
+	const a = Math.max(0, Math.trunc(pyRound(y0)));
+	const b = Math.min(H, Math.trunc(pyRound(y1)));
+	const xa = Math.max(0, Math.trunc(pyRound(x)) - reach);
+	const xb = Math.min(W, Math.trunc(pyRound(x)) + reach + 1);
+	if (b - a < 2 || xb <= xa) {
+		return 1;
+	}
+	const hit = (y) => {
+		for (let xx = xa; xx < xb; xx++) {
+			if (data[y * W + xx]) {
+				return true;
+			}
+		}
+		return false;
+	};
+	let top = 0;
+	while (a + top < b && hit(a + top)) {
+		top++;
+	}
+	let bottom = 0;
+	while (b - 1 - bottom >= a + top && hit(b - 1 - bottom)) {
+		bottom++;
+	}
+	return (top + bottom) / (b - a);
+}
+
 function inkLinks(mask, syms, a, b, pageLeft, furniture = null) {
 	const sp = (a.sp + b.sp) / 2;
 	const y0 = a.y1 + 1;
@@ -458,9 +493,13 @@ function inkLinks(mask, syms, a, b, pageLeft, furniture = null) {
 	const [lo, hi] = leftSpan(a, b, pageLeft);
 	let left = 0;
 	let raw = 0;
+	let anchored = 0;
 	for (let x = Math.max(0, lo); x <= hi; x += 2) {
 		const run = inkRun(mask, x, y0, y1);
 		raw = Math.max(raw, run);
+		if (run > anchored) {
+			anchored = Math.max(anchored, anchoredRun(mask, x, y0, y1));
+		}
 		// what the margin already holds in this column does not link the staves
 		const bg = furniture ? Math.min(0.95, furniture[x]) : 0;
 		left = Math.max(left, bg > 0 ? Math.max(0, (run - bg) / (1 - bg)) : run);
@@ -479,7 +518,7 @@ function inkLinks(mask, syms, a, b, pageLeft, furniture = null) {
 		? lines.filter((s) => inkRun(mask, s.cx, y0, y1) >= INK_LINK).length /
 			lines.length
 		: 0;
-	return [left, bars, raw];
+	return [left, bars, raw, anchored];
 }
 
 // Chœur Maris Stella : la reliure d'une photocopie (spirale), le bord noir
@@ -617,7 +656,7 @@ function buildSystems(syms, staves, mask, ink, levels, linksModel, forced) {
 		for (let k = 1; k < staves.length; k++) {
 			const a = staves[k - 1];
 			const b = staves[k];
-			const [left, bars, raw] = inkLinks(mask, syms, a, b, pageLeft, furniture);
+			const [left, bars, raw, anchored] = inkLinks(mask, syms, a, b, pageLeft, furniture);
 			// ink there, but no more than in the margin: the ink cannot tell, the
 			// other clues (brace, bar lines in line) decide
 			const blurred = raw >= INK_LINK && left < INK_LINK;
@@ -635,10 +674,14 @@ function buildSystems(syms, staves, mask, ink, levels, linksModel, forced) {
 					);
 				}
 			}
-			linkDiag.push([k, +left.toFixed(2), +bars.toFixed(2), +raw.toFixed(2), +line.toFixed(2), decided[k - 1] ? 1 : 0]);
+			linkDiag.push([k, +left.toFixed(2), +bars.toFixed(2), +raw.toFixed(2), +line.toFixed(2), decided[k - 1] ? 1 : 0, +anchored.toFixed(2)]);
 			if (left >= INK_LINK || line >= INK_LINK || bars >= 0.5) {
 				decided[k - 1] = true;
-			} else if (left < INK_SPLIT && bars < 0.1 && !blurred) {
+			} else if (
+				(left < INK_SPLIT || (left < INK_FLOAT && anchored < INK_SPLIT)) &&
+				bars < 0.1 &&
+				!blurred
+			) {
 				decided[k - 1] = false;
 			} else if (braced(syms, a, b)) {
 				decided[k - 1] = true;
