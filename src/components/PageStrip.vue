@@ -63,6 +63,13 @@ watch(
 			</button>
 			<button
 				class="secondary"
+				title="Page photographiée de travers : un quart de tour"
+				@click="omr.rotatePage(omr.currentIndex)"
+			>
+				↻ Tourner
+			</button>
+			<button
+				class="secondary"
 				title="Retirer cette page"
 				@click="omr.removePage(omr.currentIndex)"
 			>
@@ -85,6 +92,13 @@ watch(
 			</button>
 		</div>
 		<div v-if="omr.pages.length <= 1" class="actions">
+			<button
+				class="secondary"
+				title="Page photographiée de travers : un quart de tour"
+				@click="omr.rotatePage(0)"
+			>
+				↻ Tourner
+			</button>
 			<button class="secondary" title="Retirer cette page" @click="omr.removePage(0)">
 				✕ Retirer
 			</button>
