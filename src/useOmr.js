@@ -35,6 +35,7 @@ import {
 } from "./library.js";
 import { imagesFromPhotos, titleFromFileName } from "./photos.js";
 import { deskewQuad } from "./pipeline/capture/deskew.js";
+import { turnImage } from "./pipeline/capture/orient.js";
 import { fullQuad } from "./pipeline/capture/index.js";
 import {
 	detectPageCorners,
@@ -267,6 +268,42 @@ export function useOmr() {
 			0,
 			Math.min(currentIndex.value, pages.value.length - 1),
 		);
+	}
+
+	/**
+	 * Chœur Maris Stella : page photographiée de travers (téléphone en paysage,
+	 * photo retournée) : un quart de tour dans le sens des aiguilles d'une
+	 * montre, puis les coins et le redressement sont refaits.
+	 */
+	async function rotatePage(i) {
+		const p = pages.value[i];
+		if (!p) {
+			return;
+		}
+		resetResult();
+		const t = turnImage(p.image, 1);
+		const image = new ImageData(t.data, t.width, t.height);
+		const canvas = document.createElement("canvas");
+		canvas.width = t.width;
+		canvas.height = t.height;
+		canvas.getContext("2d").putImageData(image, 0, 0);
+		const type = p.photo?.type === "image/png" ? "image/png" : "image/jpeg";
+		const blob = await new Promise((res) => canvas.toBlob(res, type, 0.92));
+		URL.revokeObjectURL(p.previewUrl);
+		p.previewUrl = URL.createObjectURL(blob);
+		if (p.photo) {
+			p.photo = markRaw(blob);
+			p.key = crypto.randomUUID(); // a new photo to save
+		}
+		p.image = markRaw(image);
+		p.quad = fullQuad(image.width, image.height);
+		p.detectedQuad = null;
+		if (p.captureState === "flat") {
+			detecting = detecting.then(() => straighten(p));
+		} else {
+			p.captureState = "detecting";
+			detecting = detecting.then(() => detectCorners(p));
+		}
 	}
 
 	/** Keep pages `from` to `to` only (1-based, inclusive): one movement of a long work. */
@@ -822,6 +859,7 @@ export function useOmr() {
 		resetResult,
 		addImages,
 		removePage,
+		rotatePage,
 		keepPages,
 		movePage,
 		selectPage,
