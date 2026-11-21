@@ -409,6 +409,16 @@ const SPREAD_GAP = 3; // … this far apart on average (copista writes stray sec
  * total unlikeness (an alignment: parts never swap places).
  */
 function matchParts(old, page, recent = [], spread = true, wasSpread = []) {
+	// Chœur Maris Stella : soprano et alto à l'unisson sur une portée « C. A. »
+	// (rien n'y montre deux voix) : la portée en clé de sol juste dessous (le
+	// ténor, écrit à l'octave) n'est pas plus grave qu'elle, ce qui ne se voit
+	// jamais d'un alto sous un soprano (Nowowiejski, Gloria, page 10)
+	const clefOf = (sig) => [...sig.clefs.values()][0] ?? null;
+	const belowNotLower = (j, i) =>
+		j + 1 < page.length && i + 2 < old.length && page[j + 1].staves === 1 && old[i + 2].staves === 1 &&
+		clefOf(page[j]) === "G" && clefOf(page[j + 1]) === "G" && clefOf(old[i]) === "G" && clefOf(old[i + 1]) === "G" &&
+		page[j].mean !== null && page[j + 1].mean !== null && page[j + 1].mean >= page[j].mean &&
+		old[i].mean !== null && old[i + 1].mean !== null && old[i + 1].mean < old[i].mean - 1.5;
 	const I = old.length;
 	const J = page.length;
 	const cost = Array.from({ length: I + 1 }, () => new Array(J + 1).fill(Infinity));
@@ -454,7 +464,7 @@ function matchParts(old, page, recent = [], spread = true, wasSpread = []) {
 				page[j].hi !== null && page[j].lo !== null &&
 				// two voices well apart, or the same staff shared out on the page
 				// before (in unison now: soprano and alto sing the same line)
-				((page[j].two >= SPREAD_MIN && page[j].hi - page[j].lo >= SPREAD_GAP) || wasSpread[i]) &&
+				((page[j].two >= SPREAD_MIN && page[j].hi - page[j].lo >= SPREAD_GAP) || wasSpread[i] || belowNotLower(j, i)) &&
 				old[i].two < 0.5 && old[i + 1].two < 0.5 &&
 				old[i].mean !== null && old[i + 1].mean !== null
 			) {
