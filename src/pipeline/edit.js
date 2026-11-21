@@ -584,6 +584,9 @@ export function resultOf(reading, edited = new Set(), page = 0) {
 			changed: symbols.filter((s) => s.changed).length,
 			edited: edited.size,
 			merge: L.systems.diag ?? null,
+			links: L.systems.diag?.links ?? null,
+			before: L.systems.diag?.before ?? null,
+			final: L.systems.diag?.final ?? null,
 		},
 	};
 }
