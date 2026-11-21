@@ -135,8 +135,22 @@ export function dewarpPage(image) {
 	if (!curl) {
 		return null;
 	}
+	// une forte courbure se mesure par défaut (décalage borné d'une bande à
+	// l'autre, lissage) : on remesure sur la page corrigée et on additionne,
+	// puis la page n'est rééchantillonnée qu'une fois
+	let D = curl.D.map((row) => row.slice());
+	for (let pass = 1; pass < 3; pass++) {
+		const again = measureCurl(remap(image, { ...curl, D }));
+		if (!again) {
+			break;
+		}
+		D = D.map((row, z) => row.map((v, s) => v + again.D[z][s]));
+	}
+	return remap(image, { ...curl, D });
+}
+
+function remap(image, { D, scale, zh, sw }) {
 	const { data, width, height } = image;
-	const { D, scale, zh, sw } = curl;
 	const out = new Uint8ClampedArray(data.length);
 	// offset at (x, y), full-size px: bilinear between strip / zone centres
 	const S0 = new Int32Array(width);
