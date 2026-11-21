@@ -456,6 +456,17 @@ function parseScore(xmlText){
     Object.values(byP).forEach(list=>{ if(list.length<2) return;
       const main=list.reduce((a,b)=>b.count>a.count?b:a);
       list.forEach(d=>{ if(d!==main && d.count<0.15*main.count && d.staff===main.staff){ alias[d.key]=main.key; main.count+=d.count; main.lo=Math.min(main.lo,d.lo); main.hi=Math.max(main.hi,d.hi); main.sum+=d.sum; d.count=0; } }); }); }
+  // Accompagnement lu en plusieurs morceaux (pédale d'orgue lue à part sur une page, main droite séparée…) :
+  // une seule piste « Accompagnement », sauf instrument aigu à part (violon, flûte) et instruments nommés.
+  { const generic=n=>!n || /^(part|partie|p)\s*\d*$|^accomp/i.test(n.trim());
+    const hiP=new Set(parts.filter(p=>!VOCAL.test(partNames[p.getAttribute("id")]||"") && highInstrument(p)).map(p=>p.getAttribute("id")));
+    const acc=[...trackDefs.values()].filter(d=>d.accomp && d.count>0 && !hiP.has(d.pid));
+    if(acc.length>1){
+      const main=acc.reduce((a,b)=>b.count>a.count?b:a);
+      acc.forEach(d=>{ if(d===main) return;
+        if(!(generic(d.pname) && generic(main.pname)) && d.count>=0.25*main.count) return; // piano et orgue nommés : gardés
+        alias[d.key]=main.key; main.count+=d.count; main.lo=Math.min(main.lo,d.lo); main.hi=Math.max(main.hi,d.hi); main.sum+=d.sum; d.count=0; });
+    } }
   raw.forEach(n=>{ if(alias[n.key]) n.key=alias[n.key]; });
   // pistes : nommage
   let defs=Array.from(trackDefs.values()).filter(d=>d.count>0).sort((a,b)=>a.order-b.order);
