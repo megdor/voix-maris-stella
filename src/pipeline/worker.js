@@ -57,7 +57,8 @@ self.addEventListener("unhandledrejection", (event) => {
 function withScore(index, state, { tree, musicXml: _, ...result }) {
 	pages[index] = { state, tree };
 	const trees = pages.filter(Boolean).map((p) => p.tree);
-	return { ...result, musicXml: xmlDocument(joinTrees(trees)) };
+	// pageXml : la page lue seule, avant la jonction (diagnostic de la jonction)
+	return { ...result, musicXml: xmlDocument(joinTrees(trees)), pageXml: xmlDocument(tree) };
 }
 
 async function run(message, onProgress) {
