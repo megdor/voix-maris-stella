@@ -609,6 +609,7 @@ function buildSystems(syms, staves, mask, ink, levels, linksModel, forced) {
 			);
 		}
 	}
+	const linkDiag = [];
 	if (mask && staves.length > 1) {
 		const pageLeft = Math.min(...staves.map((st) => st.x0));
 		const furniture = marginFurniture(mask, staves);
@@ -634,6 +635,7 @@ function buildSystems(syms, staves, mask, ink, levels, linksModel, forced) {
 					);
 				}
 			}
+			linkDiag.push([k, +left.toFixed(2), +bars.toFixed(2), +raw.toFixed(2), +line.toFixed(2), decided[k - 1] ? 1 : 0]);
 			if (left >= INK_LINK || line >= INK_LINK || bars >= 0.5) {
 				decided[k - 1] = true;
 			} else if (left < INK_SPLIT && bars < 0.1 && !blurred) {
@@ -660,7 +662,11 @@ function buildSystems(syms, staves, mask, ink, levels, linksModel, forced) {
 			systems.push({ staves: [k], columns: [] });
 		}
 	});
+	const before = systems.map((sy) => sy.staves.length);
 	const mergeDiag = mergeAligned(syms, staves, systems, Boolean(mask), mask, forced);
+	mergeDiag.links = linkDiag;
+	mergeDiag.before = before;
+	mergeDiag.final = decided ? decided.map((d) => (d ? 1 : 0)) : null;
 	systems.forEach((sy, n) => {
 		sy.staves.forEach((k, pos) => {
 			staves[k].system = n;
