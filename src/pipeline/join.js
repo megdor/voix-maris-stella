@@ -269,7 +269,8 @@ function unlike(a, b) {
 	}
 	for (const [k, v] of a.clefs) {
 		if (b.clefs.has(k) && b.clefs.get(k) !== v) {
-			c += 30;
+			// a treble clef with or without its little 8 (the tenor's): the same staff
+			c += b.clefs.get(k).replace("8", "") === v.replace("8", "") ? CLEF_OCTAVE : 30;
 		}
 	}
 	if (a.mean !== null && b.mean !== null) {
@@ -278,6 +279,7 @@ function unlike(a, b) {
 	return c;
 }
 
+const CLEF_OCTAVE = 5; // Chœur Maris Stella : clé de sol du ténor, avec ou sans son 8 lu
 const SKIP_OLD = 25; // a part of the score with nothing on this page
 const PAIR = 5; // two staves read as two parts, put back together
 
@@ -399,7 +401,9 @@ function pairMeasures(upper, lower) {
 }
 const NEW_PART = 40; // a part first met on this page
 const CONTINUE = 12; // a part heard on the page before (a voice goes on)
-const SPREAD = 8; // a two-voice staff shared out between two score parts
+const SPREAD = 8;
+// Chœur Maris Stella : C. A. et ténor à l'unisson (Credo de Nowowiejski : 68,28 et 68,22)
+const UNISON = 0.5; // a two-voice staff shared out between two score parts
 const SPREAD_MIN = 0.3; // … when at least this share of its bars has two voices
 const SPREAD_GAP = 3; // … this far apart on average (copista writes stray second voices),
 // shared out between two one-voice parts (not an instrument's staff)
@@ -417,8 +421,8 @@ function matchParts(old, page, recent = [], spread = true, wasSpread = []) {
 	const belowNotLower = (j, i) =>
 		j + 1 < page.length && i + 2 < old.length && page[j + 1].staves === 1 && old[i + 2].staves === 1 &&
 		clefOf(page[j]) === "G" && clefOf(page[j + 1]) === "G" && clefOf(old[i]) === "G" && clefOf(old[i + 1]) === "G" &&
-		page[j].mean !== null && page[j + 1].mean !== null && page[j + 1].mean >= page[j].mean &&
-		old[i].mean !== null && old[i + 1].mean !== null && old[i + 1].mean < old[i].mean - 1.5;
+		page[j].mean !== null && page[j + 1].mean !== null && page[j + 1].mean >= page[j].mean - UNISON &&
+		old[i].mean !== null && old[i + 1].mean !== null && old[i + 1].mean < old[i].mean;
 	const I = old.length;
 	const J = page.length;
 	const cost = Array.from({ length: I + 1 }, () => new Array(J + 1).fill(Infinity));
@@ -464,8 +468,11 @@ function matchParts(old, page, recent = [], spread = true, wasSpread = []) {
 				page[j].hi !== null && page[j].lo !== null &&
 				// two voices well apart, or the same staff shared out on the page
 				// before (in unison now: soprano and alto sing the same line)
-				((page[j].two >= SPREAD_MIN && page[j].hi - page[j].lo >= SPREAD_GAP) || wasSpread[i] || belowNotLower(j, i)) &&
-				old[i].two < 0.5 && old[i + 1].two < 0.5 &&
+				// (two voices well apart only between parts of one voice each; the C. A.
+				// clue, or the sharing of the page before, also when the soprano was
+				// divided : Nowowiejski, Credo, après un Gloria en divisi)
+				((page[j].two >= SPREAD_MIN && page[j].hi - page[j].lo >= SPREAD_GAP && old[i].two < 0.5 && old[i + 1].two < 0.5) ||
+					wasSpread[i] || belowNotLower(j, i)) &&
 				old[i].mean !== null && old[i + 1].mean !== null
 			) {
 				const hiSig = { ...page[j], mean: page[j].hi };
