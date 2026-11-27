@@ -99,6 +99,20 @@
   .fiab ul{margin:6px 0 0 18px;padding:0}
   .susp-ov{position:absolute;background:rgba(255,152,0,.16);border:1.5px solid rgba(230,120,0,.55);border-radius:6px;pointer-events:none}
   #osmd{position:relative}
+  /* plein écran : la partition seule, avec la barre de lecture ; marche aussi sur iPhone (sans l'API plein écran) */
+  .scoreTools{display:flex;gap:6px;align-items:center}
+  .scoreTools button{padding:5px 10px}
+  #fsExit{display:none}
+  body.fs{overflow:hidden}
+  body.fs #scoreCard{position:fixed;inset:0;z-index:30;margin:0;border-radius:0;display:flex;flex-direction:column;padding:8px 10px 0}
+  body.fs #scoreWrap,body.fs #rollWrap{flex:1;max-height:none;min-height:0}
+  body.fs #scoreWrap{overflow:auto}
+  body.fs .transport{position:fixed;left:0;right:0;bottom:0;z-index:31;margin:0;border-radius:0}
+  body.fs #scoreCard{padding-bottom:var(--fsBar,70px)}
+  body.fs #fsBtn{display:none}
+  body.fs #fsExit{display:inline-block}
+  body.fs #viewHint{display:none}
+  .vlab{display:inline-flex;align-items:center;gap:4px}
   .pill{font-size:12px;background:#f2ece2;border-radius:99px;padding:2px 8px;color:#6b5a3e}
 </style>
 </head>
@@ -160,13 +174,19 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="scoreCard">
       <div class="row" style="justify-content:space-between">
         <div class="tabs">
           <button id="tabScore" class="on">Partition</button>
           <button id="tabRoll">Défilement des voix</button>
         </div>
         <span class="muted" style="font-size:12.5px" id="viewHint">Cliquez dans le défilement pour vous placer à un endroit.</span>
+        <div class="scoreTools">
+          <button id="zoomOut" title="Partition plus petite" aria-label="Partition plus petite">A−</button>
+          <button id="zoomIn" title="Partition plus grande (pour mieux lire)" aria-label="Partition plus grande">A+</button>
+          <button id="fsBtn" title="La partition en grand, sur tout l'écran">⛶ Plein écran</button>
+          <button id="fsExit" class="primary" title="Revenir à l'affichage normal">✕ Quitter le plein écran</button>
+        </div>
       </div>
       <div id="scoreWrap"><div id="osmd"></div><div id="scoreMsg" class="muted" style="padding:20px"></div></div>
       <div id="rollWrap" class="hidden"><canvas id="roll"></canvas></div>
@@ -180,6 +200,7 @@
         <div class="sep"></div>
         <label>Tempo <input id="speed" type="range" min="40" max="150" step="5" value="100"> <span id="speedVal">100 %</span></label>
         <span class="muted" id="bpm"></span>
+        <label class="vlab" title="Volume général">🔊 <input id="mainVol" type="range" min="0.2" max="2" step="0.1" value="1" aria-label="Volume général"></label>
         <button id="moreBtn" type="button" aria-expanded="false" title="Afficher les autres réglages">⚙ Options</button>
         <div class="sep xtra"></div>
         <button id="giveNote" class="xtra" title="Jouer la première note de chaque voix">♪ Donner la note</button>
@@ -873,8 +894,11 @@ function expandRepeats(mi){
 
 /* ================= audio ================= */
 let ctx=null, master=null;
+// volume général : 1 = un peu plus fort qu'avant (0,5 → 0,8) ; le compresseur évite la saturation
+const MASTER_BASE=0.8;
+let mainVol=1; try{ const v=parseFloat(localStorage.getItem("voixVol")); if(v>0) mainVol=Math.min(2,v); }catch(e){}
 function audio(){
-  if(!ctx){ ctx=new (window.AudioContext||window.webkitAudioContext)(); master=ctx.createGain(); master.gain.value=0.5;
+  if(!ctx){ ctx=new (window.AudioContext||window.webkitAudioContext)(); master=ctx.createGain(); master.gain.value=MASTER_BASE*mainVol;
     const comp=ctx.createDynamicsCompressor(); master.connect(comp); comp.connect(ctx.destination); }
   if(ctx.state==="suspended") ctx.resume();
   return ctx;
@@ -1077,6 +1101,8 @@ function loadOsmdLib(){
     s.onload=res; s.onerror=()=>rej(new Error("lib")); document.head.appendChild(s); setTimeout(()=>rej(new Error("timeout")),15000); });
   return osmdLoading;
 }
+// taille de la partition choisie (A− / A+), gardée d'une fois sur l'autre
+let userZoom=1; try{ const z=parseFloat(localStorage.getItem("voixZoom")); if(z>0) userZoom=Math.max(0.6,Math.min(2.5,z)); }catch(e){}
 async function renderScore(){
   $("#scoreMsg").textContent="Affichage de la partition…"; $("#osmd").innerHTML="";
   osmd=null; osmdSteps=null; osmdIdx=-1;
@@ -1088,7 +1114,7 @@ async function renderScore(){
     osmd=new opensheetmusicdisplay.OpenSheetMusicDisplay("osmd",{autoResize:true,backend:"svg",drawTitle:hasTitle,drawSubtitle:hasTitle,drawPartNames:true,drawPartAbbreviations:true,followCursor:false});
     if(narrow) osmd.EngravingRules.PageLeftMargin=osmd.EngravingRules.PageRightMargin=1;
     await osmd.load(displayXml(S.xml, S.tracks, shownTitle));
-    osmd.zoom=narrow?Math.max(0.45,Math.min(1,w/760)):1;
+    osmd.zoom=(narrow?Math.max(0.45,Math.min(1,w/760)):1)*userZoom;
     if(narrow) for(const ip of osmd.Sheet.Instruments) ip.NameLabel.text=ip.NameLabel.text.split(/\s*\/\s*/).map(x=>x.slice(0,1)).join("");
     osmd.render();
     osmd.cursor.show();
@@ -1180,6 +1206,48 @@ function showTab(which){
 }
 $("#tabScore").onclick=()=>showTab("score");
 $("#tabRoll").onclick=()=>showTab("roll");
+
+/* ---- taille de la partition, plein écran, volume général ---- */
+function setZoom(f){
+  userZoom=Math.max(0.6,Math.min(2.5,Math.round(userZoom*f*100)/100));
+  try{ localStorage.setItem("voixZoom",String(userZoom)); }catch(e){}
+  if(!osmd) return;
+  const box=$("#scoreWrap"), rel=box.scrollHeight? box.scrollTop/box.scrollHeight : 0;
+  const w=$("#osmd").clientWidth||800, narrow=w<600;
+  try{
+    osmd.zoom=(narrow?Math.max(0.45,Math.min(1,w/760)):1)*userZoom;
+    osmd.render(); osmd.cursor.show();
+    // le curseur reprend sa place après le nouveau tracé
+    const c=osmd.cursor, k=osmdIdx; c.reset(); osmdIdx=0; while(osmdIdx<k){ c.next(); osmdIdx++; }
+    drawSuspectOverlays();
+    box.scrollTop=rel*box.scrollHeight;
+  }catch(e){ console.warn("zoom", e); }
+}
+$("#zoomIn").onclick=()=>setZoom(1.2);
+$("#zoomOut").onclick=()=>setZoom(1/1.2);
+function fsBarHeight(){ const t=$(".transport"); if(t) document.body.style.setProperty("--fsBar",(t.offsetHeight+6)+"px"); }
+function enterFs(){
+  document.body.classList.add("fs"); fsBarHeight();
+  const el=document.documentElement;
+  try{ const r=(el.requestFullscreen||el.webkitRequestFullscreen)?.call(el); if(r&&r.catch) r.catch(()=>{}); }catch(e){}
+  setTimeout(()=>{ fsBarHeight(); drawSuspectOverlays(); render(); },350);
+}
+function exitFs(){
+  document.body.classList.remove("fs");
+  try{ if(document.fullscreenElement||document.webkitFullscreenElement) (document.exitFullscreen||document.webkitExitFullscreen).call(document); }catch(e){}
+  setTimeout(()=>{ drawSuspectOverlays(); render(); },350);
+}
+$("#fsBtn").onclick=enterFs;
+$("#fsExit").onclick=exitFs;
+// sortie par la touche Échap ou le geste du navigateur : on quitte aussi l'affichage plein écran
+const onFsChange=()=>{ if(!document.fullscreenElement&&!document.webkitFullscreenElement&&document.body.classList.contains("fs")) exitFs(); };
+document.addEventListener("fullscreenchange",onFsChange); document.addEventListener("webkitfullscreenchange",onFsChange);
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&document.body.classList.contains("fs")) exitFs(); });
+window.addEventListener("resize",()=>{ if(document.body.classList.contains("fs")) fsBarHeight(); });
+$("#mainVol").value=String(mainVol);
+$("#mainVol").oninput=e=>{ mainVol=parseFloat(e.target.value)||1;
+  try{ localStorage.setItem("voixVol",String(mainVol)); }catch(err){}
+  if(master&&ctx) master.gain.setTargetAtTime(MASTER_BASE*mainVol,ctx.currentTime,.05); };
 
 /* ---- boucle d'affichage ---- */
 function render(){
