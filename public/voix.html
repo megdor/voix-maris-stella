@@ -443,6 +443,14 @@ function parseScore(xmlText){
   });
   // longueur par défaut si mesure vide
   measInfo.forEach(i=>{ if(!i.len) i.len=i.beats*4/i.beatType; });
+  // une voix plus longue que le chiffrage (une croche lue noire dans l'accompagnement) n'allonge pas la
+  // mesure si une autre voix en fait exactement la durée : sinon tout le chœur attendrait (Gevaert)
+  measInfo.forEach(i=>{ const vs=Object.values(i.vd||{}).filter(v=>v.n); if(!vs.length) return;
+    const exp=vs[0].exp; if(!(exp>0)) return;
+    if(i.len>exp+0.01){ if(vs.some(v=>Math.abs(v.d-exp)<0.01)) i.len=exp; return; }
+    // plus courte que le chiffrage alors que les voix ne s'accordent pas entre elles (notes oubliées dans
+    // l'accompagnement) : la mesure garde sa durée ; une vraie levée a toutes ses voix de même longueur
+    const ds=vs.map(v=>v.d); if(i.len<exp-0.01 && Math.max(...ds)-Math.min(...ds)>0.01) i.len=exp; });
   // levée (première ou dernière mesure incomplète) : sa longueur est celle des voix qui chantent ; des
   // silences mal lus dans les voix muettes ne doivent pas l'allonger
   measInfo.forEach((i,mi)=>{ if(!(mi===0||mi===measInfo.length-1||i.implicit)) return;
