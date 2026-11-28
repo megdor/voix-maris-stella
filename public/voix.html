@@ -1231,7 +1231,7 @@ function loadLame(){
 }
 const pause0=()=>new Promise(r=>setTimeout(r,0));
 async function encodeMp3(pcm,rate,onProg){
-  const enc=new lamejs.Mp3Encoder(1,rate,128), parts=[], N=1152, buf=new Int16Array(N);
+  const enc=new lamejs.Mp3Encoder(1,rate,96), parts=[], N=1152, buf=new Int16Array(N);
   for(let i=0,k=0;i<pcm.length;i+=N,k++){
     const n=Math.min(N,pcm.length-i);
     for(let j=0;j<n;j++){ const v=Math.max(-1,Math.min(1,pcm[i+j])); buf[j]=v<0?v*32768:v*32767; }
@@ -1268,18 +1268,27 @@ async function exportAudio(only){
   try{
     const loop=loopRange(), q0=loop?loop.q0:0, q1=loop?loop.q1:S.totalQ, sp=P.speed||1, base=secAt(q0), lead=.25;
     const T=q=>(secAt(q)-base)/sp+lead, len=T(q1)+1.5;
-    const rate=len>480?22050:44100;   // morceau long : fréquence réduite, pour rester léger en mémoire
+    const rate=22050;   // largement suffisant pour ces sons de travail, et deux fois plus rapide à préparer
     say("Préparation du son…"); await pause0();
     const OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext;
     const oc=new OAC(1,Math.ceil(len*rate),rate);
     const m=oc.createGain(); m.gain.value=MASTER_BASE*mainVol; const comp=oc.createDynamicsCompressor(); m.connect(comp); comp.connect(oc.destination);
-    let n=0;
+    const notes=[];
     for(const e of S.events){
       if(e.q<q0-1e-6||e.q>=q1-1e-6) continue;
       const v=sel[e.tr]; if(!(v>0)) continue;
       const t=T(e.q), dur=Math.max(.06,Math.min(T(Math.min(e.q+e.d,q1))-t,30));
-      playNote(e.midi,t,dur*.97,v,S.tracks[e.tr].instr,oc,m,false); n++;
+      notes.push([t,dur,e,v]);
     }
+    notes.sort((a,b)=>a[0]-b[0]);
+    // Les notes sont ajoutées au fur et à mesure du rendu (suspend/resume) : sinon toutes les notes du morceau
+    // restent branchées du début à la fin et le rendu devient très lent.
+    const STEP=3, MARGE=.25; let k=0;
+    const add=lim=>{ while(k<notes.length&&notes[k][0]<lim){ const [t,dur,e,v]=notes[k++]; playNote(e.midi,t,dur*.97,v,S.tracks[e.tr].instr,oc,m,false); } };
+    add(STEP+MARGE);
+    if(oc.suspend) for(let p=STEP;p<len;p+=STEP){ const lim=p+STEP+MARGE, pc=Math.round(p/len*100);
+      oc.suspend(p).then(()=>{ add(lim); say("Préparation du son… "+pc+" %"); oc.resume(); }); }
+    else add(Infinity);
     const audioBuf=await oc.startRendering();
     const pcm=audioBuf.getChannelData(0);
     let blob, ext="mp3";
