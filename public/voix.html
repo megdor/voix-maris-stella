@@ -52,7 +52,7 @@
   #mine .item .del.sure{background:#b3261e;border-color:#b3261e;color:#fff}
   /* mixer */
   #tracks{display:grid;gap:8px;margin-top:10px}
-  .trk{display:grid;grid-template-columns:14px minmax(120px,1.4fr) auto auto auto minmax(90px,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:#fff}
+  .trk{display:grid;grid-template-columns:14px minmax(120px,1.4fr) auto auto auto minmax(90px,1fr) auto auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:#fff}
   .trk .sw{width:14px;height:14px;border-radius:4px}
   .trk input.name{font:inherit;font-weight:600;border:1px solid transparent;background:transparent;padding:4px 6px;border-radius:6px;width:100%}
   .trk input.name:hover,.trk input.name:focus{border-color:var(--line);outline:none}
@@ -62,8 +62,8 @@
   .trk select{font:inherit;font-size:13px;padding:4px;border:1px solid var(--line);border-radius:7px;background:#fff}
   .trk.silent{opacity:.5}
   @media (max-width:700px){
-    .trk{grid-template-columns:14px 1fr auto auto;grid-template-areas:"s n so mu" "s v v me"}
-    .trk .sw{grid-area:s}.trk .nm{grid-area:n}.trk .solo{grid-area:so}.trk .mute{grid-area:mu}.trk .vol{grid-area:v}.trk .me{grid-area:me}.trk select{display:none}
+    .trk{grid-template-columns:14px 1fr auto auto;grid-template-areas:"s n so mu" "s v dl me"}
+    .trk .sw{grid-area:s}.trk .nm{grid-area:n}.trk .solo{grid-area:so}.trk .mute{grid-area:mu}.trk .vol{grid-area:v}.trk .me{grid-area:me}.trk .dl{grid-area:dl}.trk select{display:none}
   }
   /* transport */
   .transport{position:sticky;bottom:0;z-index:5;background:rgba(255,253,249,.97);backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-top:14px;box-shadow:0 6px 24px rgba(0,0,0,.06)}
@@ -201,6 +201,8 @@
         <label>Tempo <input id="speed" type="range" min="40" max="150" step="5" value="100"> <span id="speedVal">100 %</span></label>
         <span class="muted" id="bpm"></span>
         <label class="vlab" title="Volume général">🔊 <input id="mainVol" type="range" min="0.2" max="2" step="0.1" value="1" aria-label="Volume général"></label>
+        <button id="dlMp3" type="button" title="Télécharger en MP3 exactement ce que vous entendez : les voix choisies (Solo, Muet, En avant), le tempo et, s'il est coché, le passage travaillé">⬇ MP3</button>
+        <span id="dlState" class="muted" style="font-size:12.5px" aria-live="polite"></span>
         <button id="moreBtn" type="button" aria-expanded="false" title="Afficher les autres réglages">⚙ Options</button>
         <div class="sep xtra"></div>
         <button id="giveNote" class="xtra" title="Jouer la première note de chaque voix">♪ Donner la note</button>
@@ -214,6 +216,7 @@
       </div>
     </div>
   </section>
+  <p class="muted" style="font-size:12px;margin:14px 2px 0">Export MP3 : encodeur <a href="https://lame.sourceforge.net/" target="_blank" rel="noopener">LAME</a> (portage JavaScript <a href="https://github.com/zhuker/lamejs" target="_blank" rel="noopener">lamejs</a>, licence LGPL), chargé à part au premier export.</p>
 </main>
 
 <!-- Partitions intégrées (bibliothèque du chœur). Format : [{"titre":"...","xml":"<?xml ..."}] ou [{"titre":"...","url":"https://..."}] -->
@@ -905,8 +908,8 @@ function audio(){
 }
 const freq=m=>440*Math.pow(2,(m-69)/12);
 let live=new Set();
-function playNote(midi,t0,dur,vol,instr){
-  const c=ctx, f=freq(midi), g=c.createGain(), end=t0+dur;
+function playNote(midi,t0,dur,vol,instr,c=ctx,dest=master,keep=true){
+  const f=freq(midi), g=c.createGain(), end=t0+dur;
   const nodes=[g];
   if(instr==="piano"){
     const o=c.createOscillator(); o.type="triangle"; o.frequency.value=f;
@@ -929,7 +932,8 @@ function playNote(midi,t0,dur,vol,instr){
     g.gain.setValueAtTime(peak,Math.max(t0+.06,end-rel)); g.gain.linearRampToValueAtTime(0,end);
     [o,o2,vib].forEach(x=>{x.start(t0);x.stop(end+.05);}); nodes.push(o,o2,vib,lp,go,vg);
   }
-  g.connect(master);
+  g.connect(dest);
+  if(!keep) return;
   const h={nodes,end}; live.add(h); nodes[1].onended=()=>live.delete(h);
 }
 function click(t0,strong){
@@ -1028,11 +1032,13 @@ function buildTracks(){
       <button class="mute" title="Couper cette voix">Muet</button>
       <button class="me" title="Ma voix en avant, les autres en fond">★ En avant</button>
       <input class="vol" type="range" min="0" max="1" step="0.05" value="${t.vol}" aria-label="Volume">
+      <button class="dl" title="Télécharger cette voix seule en MP3" aria-label="Télécharger cette voix seule en MP3">⬇</button>
       <select aria-label="Son"><option value="voix">Voix</option><option value="piano">Piano</option></select>`;
     row.querySelector("select").value=t.instr;
     row.querySelector(".name").oninput=e=>{t.name=e.target.value;};
     row.querySelector(".solo").onclick=()=>{t.solo=!t.solo; refreshTracks(); restartIfPlaying();};
     row.querySelector(".mute").onclick=()=>{t.mute=!t.mute; if(t.mute) t.solo=false; refreshTracks(); restartIfPlaying();};
+    row.querySelector(".dl").onclick=()=>exportAudio(i);
     row.querySelector(".me").onclick=()=>{ S.tracks.forEach(o=>{o.solo=false;o.mute=false;o.vol=(o===t)?1:(o.accomp?0.3:0.22);}); refreshTracks(); restartIfPlaying(); };
     row.querySelector(".vol").oninput=e=>{t.vol=+e.target.value;};
     row.querySelector(".vol").onchange=restartIfPlaying;
@@ -1206,6 +1212,88 @@ function showTab(which){
 }
 $("#tabScore").onclick=()=>showTab("score");
 $("#tabRoll").onclick=()=>showTab("roll");
+
+/* ---- téléchargement en MP3 (28/11/2026) ----
+   Le morceau est « joué » hors ligne (OfflineAudioContext, avec les mêmes sons que la lecture), en quelques
+   secondes, puis encodé en MP3 par lamejs (chargé à la demande). Sans réseau, ou si lamejs ne se charge pas,
+   le fichier part en WAV : le bouton ne reste jamais sans réponse. */
+const LAME_URL="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js";
+let lameLoading=null;
+function loadLame(){
+  if(window.lamejs) return Promise.resolve();
+  if(lameLoading) return lameLoading;
+  lameLoading=new Promise((ok,ko)=>{ const sc=document.createElement("script"); sc.src=LAME_URL; sc.async=true;
+    const t=setTimeout(()=>ko(new Error("délai")),8000);
+    sc.onload=()=>{ clearTimeout(t); window.lamejs?ok():ko(new Error("lamejs absent")); };
+    sc.onerror=()=>{ clearTimeout(t); lameLoading=null; ko(new Error("chargement")); };
+    document.head.appendChild(sc); });
+  return lameLoading;
+}
+const pause0=()=>new Promise(r=>setTimeout(r,0));
+async function encodeMp3(pcm,rate,onProg){
+  const enc=new lamejs.Mp3Encoder(1,rate,128), parts=[], N=1152, buf=new Int16Array(N);
+  for(let i=0,k=0;i<pcm.length;i+=N,k++){
+    const n=Math.min(N,pcm.length-i);
+    for(let j=0;j<n;j++){ const v=Math.max(-1,Math.min(1,pcm[i+j])); buf[j]=v<0?v*32768:v*32767; }
+    const out=enc.encodeBuffer(n===N?buf:buf.subarray(0,n)); if(out.length) parts.push(new Uint8Array(out));
+    if(k%200===0){ onProg(i/pcm.length); await pause0(); }
+  }
+  const end=enc.flush(); if(end.length) parts.push(new Uint8Array(end));
+  return new Blob(parts,{type:"audio/mpeg"});
+}
+function encodeWav(pcm,rate){
+  const b=new ArrayBuffer(44+pcm.length*2), v=new DataView(b), w=(o,s)=>{ for(let i=0;i<s.length;i++) v.setUint8(o+i,s.charCodeAt(i)); };
+  w(0,"RIFF"); v.setUint32(4,36+pcm.length*2,true); w(8,"WAVE"); w(12,"fmt "); v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+  v.setUint32(24,rate,true); v.setUint32(28,rate*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true); w(36,"data"); v.setUint32(40,pcm.length*2,true);
+  for(let i=0;i<pcm.length;i++){ const x=Math.max(-1,Math.min(1,pcm[i])); v.setInt16(44+i*2,x<0?x*32768:x*32767,true); }
+  return new Blob([b],{type:"audio/wav"});
+}
+function fileBase(sel,loop){
+  const title=($("#title").textContent||"partition").trim();
+  const on=S.tracks.filter((t,i)=>sel[i]>0), all=on.length===S.tracks.length && on.every(t=>t.vol>=.95);
+  let who=all?"toutes les voix":on.length===1?on[0].name:on.map(t=>t.name).join(" + ");
+  if(!all && on.length>1 && S.tracks.some((t,i)=>sel[i]>0 && sel[i]<.5)) who=on.filter((t,i)=>sel[S.tracks.indexOf(t)]>=.5).map(t=>t.name).join(" + ")+" en avant";
+  let n=title+" - "+who;
+  if(loop) n+=" - mesures "+$("#from").value+"-"+$("#to").value;
+  if(Math.abs(P.speed-1)>.001) n+=" ("+Math.round(P.speed*100)+" %)";
+  return n.replace(/[\\/:*?"<>|]+/g," ").replace(/\s+/g," ").trim().slice(0,120);
+}
+let exporting=false;
+async function exportAudio(only){
+  if(!S||exporting) return;
+  const state=$("#dlState"), btn=$("#dlMp3"), say=t=>{ state.textContent=t; };
+  const sel=S.tracks.map((tr,i)=> only!=null ? (i===only?1:0) : (audible(tr)?tr.vol:0));
+  if(!sel.some(v=>v>0)){ say("Aucune voix à enregistrer : retirez un « Muet » ou choisissez une voix."); return; }
+  exporting=true; btn.disabled=true;
+  try{
+    const loop=loopRange(), q0=loop?loop.q0:0, q1=loop?loop.q1:S.totalQ, sp=P.speed||1, base=secAt(q0), lead=.25;
+    const T=q=>(secAt(q)-base)/sp+lead, len=T(q1)+1.5;
+    const rate=len>480?22050:44100;   // morceau long : fréquence réduite, pour rester léger en mémoire
+    say("Préparation du son…"); await pause0();
+    const OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext;
+    const oc=new OAC(1,Math.ceil(len*rate),rate);
+    const m=oc.createGain(); m.gain.value=MASTER_BASE*mainVol; const comp=oc.createDynamicsCompressor(); m.connect(comp); comp.connect(oc.destination);
+    let n=0;
+    for(const e of S.events){
+      if(e.q<q0-1e-6||e.q>=q1-1e-6) continue;
+      const v=sel[e.tr]; if(!(v>0)) continue;
+      const t=T(e.q), dur=Math.max(.06,Math.min(T(Math.min(e.q+e.d,q1))-t,30));
+      playNote(e.midi,t,dur*.97,v,S.tracks[e.tr].instr,oc,m,false); n++;
+    }
+    const audioBuf=await oc.startRendering();
+    const pcm=audioBuf.getChannelData(0);
+    let blob, ext="mp3";
+    try{ say("Encodage MP3…"); await loadLame(); blob=await encodeMp3(pcm,rate,p=>say("Encodage MP3… "+Math.round(p*100)+" %")); }
+    catch(err){ console.warn("MP3 indisponible, WAV à la place",err); blob=encodeWav(pcm,rate); ext="wav"; }
+    const a=document.createElement("a"), url=URL.createObjectURL(blob);
+    a.href=url; a.download=fileBase(sel,loop)+"."+ext; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+    say(ext==="mp3" ? "✓ MP3 téléchargé" : "✓ Téléchargé en WAV (MP3 indisponible sans connexion)");
+    setTimeout(()=>{ if(state.textContent.startsWith("✓")) say(""); },8000);
+  }catch(err){ console.warn("export audio",err); say("Le téléchargement n’a pas pu se faire."); }
+  finally{ exporting=false; btn.disabled=false; }
+}
+$("#dlMp3").onclick=()=>exportAudio(null);
 
 /* ---- taille de la partition, plein écran, volume général ---- */
 function setZoom(f){
