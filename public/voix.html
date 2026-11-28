@@ -818,7 +818,9 @@ function checkScore(measInfo, tracks, events, timeline, partNames){
     { const sung=vd.filter(([,v])=>v.n); if(sung.length){ const L=Math.max(...sung.map(([,v])=>v.d));
         vd=vd.filter(([,v])=>v.n || (v.d>L+0.01 && info.len>L+0.01)); } }
     const voc=vd.filter(([,v])=>!v.acc);
-    const pickup=(mi===0||mi===last||info.implicit) && vd.every(([,v])=>v.d<=v.exp+0.01) &&
+    // mesure coupée en deux par une reprise ou un « Fine » (levée du couplet, fin avant le D.C.) : toutes
+    // les voix chantées s'accordent sur la même durée, plus courte — écrit ainsi, pas une erreur (Gevaert)
+    const pickup=(mi===0||mi===last||info.implicit||(voc.length>=2 && voc[0][1].d<voc[0][1].exp-0.01)) && vd.every(([,v])=>v.d<=v.exp+0.01) &&
       (voc.length? voc.every(([,v])=>Math.abs(v.d-voc[0][1].d)<0.01) : true);
     for(const [k,v] of vd){
       if(Math.abs(v.d-v.exp)<0.01 || pickup) continue;
@@ -841,7 +843,8 @@ function checkScore(measInfo, tracks, events, timeline, partNames){
       const octaveAR = Math.abs(b-a)===12 || Math.abs(b-c)===12;   // un saut d'octave exacte est un geste musical normal
       if(c!==null && !octaveAR && Math.abs(b-a)>=10 && Math.abs(b-c)>=10 && Math.sign(b-a)===Math.sign(b-c)){
         add(mi, t.name, "note isolée très éloignée de ses voisines"); skip=i+1; continue; }   // le retour n'est pas une 2e erreur
-      if(i!==skip && Math.abs(b-a)>12 && jumpAt.get(a+">"+b).size<3) add(mi, t.name, `saut de ${Math.abs(b-a)} demi-tons`);
+      const apres=seq[i].q-(seq[i-1].q+seq[i-1].d)>=1;   // après un silence, la voix peut reprendre ailleurs
+      if(i!==skip && !apres && Math.abs(b-a)>12 && jumpAt.get(a+">"+b).size<3) add(mi, t.name, `saut de ${Math.abs(b-a)} demi-tons`);
     }
     // registre inhabituel : toute une mesure loin de la tessiture habituelle de la voix (clé mal lue, octave fausse)
     const sorted=seq.map(e=>e.midi).sort((x,y)=>x-y); if(sorted.length<8) return;
