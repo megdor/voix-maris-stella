@@ -1287,6 +1287,21 @@ export function systemTrees(page, ctx) {
 				const lyrics = cell.lyrics;
 				voices.forEach((voice, vi) => {
 					const evs = voice.evs;
+					// Chœur Maris Stella (28/11/2026) : crochets de triolets (début et fin de chaque groupe :
+					// 3 croches, 3 noires, blanche + noire…). Sans eux, l'affichage montrait des noires
+					// ordinaires (6 noires dans une mesure à 4 temps) alors que le rythme joué était juste.
+					{
+						let open = -1, acc = 0, minD = Infinity;
+						const close = (i) => { if (open >= 0) { evs[i].tupStop = true; open = -1; } };
+						evs.forEach((e, i) => {
+							if (e.gap || !e.tuplet) { if (open >= 0) close(i - 1); return; }
+							if (open < 0) { open = i; acc = 0; minD = Infinity; e.tupStart = true; }
+							acc += e.dur; minD = Math.min(minD, e.dur);
+							const n = acc / (3 * minD);
+							if (acc >= 3 * minD - 1e-6 && Math.abs(n - Math.round(n)) < 1e-6) close(i);
+						});
+						if (open >= 0) close(evs.length - 1);
+					}
 					// une pause seule vaut la mesure entière, quel que soit le chiffrage
 					if (evs.length === 1 && evs[0].rest && evs[0].whole && measLen) voice.end = voice.start + measLen;
 					if (vi > 0) {
@@ -1313,9 +1328,15 @@ export function systemTrees(page, ctx) {
 							nt.sub("rest");
 							nt.sub("duration", dv);
 							nt.sub("voice", voiceBase + vi + 1);
-							const ty = noteType(dur, 0, false);
+							const ty = noteType(dur, 0, !!e.tuplet);
 							if (ty && !(e.whole && evs.length === 1)) nt.sub("type", ty);
+							if (e.tuplet) {
+								const tmod = nt.sub("time-modification");
+								tmod.sub("actual-notes", 3);
+								tmod.sub("normal-notes", 2);
+							}
 							if (staffNo) nt.sub("staff", staffNo);
+							if (e.tupStart || e.tupStop) nt.sub("notations").sub("tuplet", null, { type: e.tupStart ? "start" : "stop" });
 						} else {
 							const hs = [...e.heads].sort((a, b) => b.y - a.y);
 							hs.forEach((h, j) => {
@@ -1339,10 +1360,12 @@ export function systemTrees(page, ctx) {
 								}
 								if (e.up !== null && e.up !== undefined) nt.sub("stem", e.up ? "up" : "down");
 								if (staffNo) nt.sub("staff", staffNo);
-								if (h.tieStart || h.tieStop) {
+								const tupMark = j === 0 && (e.tupStart || e.tupStop) ? (e.tupStart && e.tupStop ? null : e.tupStart ? "start" : "stop") : null;
+								if (h.tieStart || h.tieStop || tupMark) {
 									const no = nt.sub("notations");
 									if (h.tieStop) no.sub("tied", null, { type: "stop" });
 									if (h.tieStart) no.sub("tied", null, { type: "start" });
+									if (tupMark) no.sub("tuplet", null, { type: tupMark });
 								}
 								const hc = h.x + h.w / 2;
 								// mot large étalé sur plusieurs notes (Encore) : rattaché à la note sous son début
