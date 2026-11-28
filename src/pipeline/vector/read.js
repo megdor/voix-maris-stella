@@ -454,10 +454,47 @@ export function readPage(raw, state = { keys: [], times: null }) {
 		}
 	}
 	// têtes de notes (les petites : notes d'agrément, ignorées)
+	// La taille « normale » se juge portée par portée : un conducteur peut graver les voix plus petit que le
+	// piano (Venez divin Messie, Gevaert : 14,2 contre 18,9) sans que ce soient des notes d'agrément.
 	const bigHead = median(syms.filter((s) => s.s in HEADS).map((s) => s.size)) ?? 4 * sp;
+	const staffOf = (y) => {
+		let best = -1;
+		let bd = Infinity;
+		staves.forEach((st, i) => {
+			const d = y < st.top ? st.top - y : y > st.bot ? y - st.bot : 0;
+			if (d < bd) {
+				bd = d;
+				best = i;
+			}
+		});
+		return bd < 6 * (staves[best]?.sp ?? sp) ? best : -1;
+	};
+	const headSize = new Map();
+	for (const s of syms) {
+		if (!(s.s in HEADS)) continue;
+		const k = staffOf(s.y);
+		if (!headSize.has(k)) headSize.set(k, []);
+		headSize.get(k).push(s.size);
+	}
+	// (pas pour une portée sans clé de sol, de fa ou d'ut : percussions gravées petit, Deliver Us)
+	const pitchedMemo = new Map();
+	const pitched = (k) => {
+		if (!pitchedMemo.has(k)) pitchedMemo.set(k, pitched0(k));
+		return pitchedMemo.get(k);
+	};
+	const pitched0 = (k) => k >= 0 && syms.some((x) => /^clef[GFC]/.test(x.s) && x.y >= staves[k].top - 2 * staves[k].sp && x.y <= staves[k].bot + 2 * staves[k].sp);
+	const normalAt = (y) => {
+		if (!pitched(staffOf(y))) return bigHead;
+		const l = headSize.get(staffOf(y));
+		return l && l.length >= 3 ? median(l) : bigHead;
+	};
 	const heads = syms
-		.filter((s) => s.s in HEADS && s.size > 0.8 * bigHead)
-		.map((s, i) => ({ id: i, kind: s.s, x: s.x, y: s.y, w: s.s === "head4" ? 1.7 * sp : s.s === "head0" ? 2.2 * sp : 1.18 * sp }));
+		.filter((s) => s.s in HEADS && s.size > 0.8 * normalAt(s.y))
+		// largeur d'une tête : à l'interligne de sa portée (piano plus grand que les voix : Gevaert)
+		.map((s, i) => {
+			const hs = staves[staffOf(s.y)]?.sp ?? sp;
+			return { id: i, kind: s.s, x: s.x, y: s.y, w: s.s === "head4" ? 1.7 * hs : s.s === "head0" ? 2.2 * hs : 1.18 * hs };
+		});
 	const V = verticals(raw, sp);
 	const systems = findSystems(staves, V, raw);
 	const out = [];
@@ -1015,7 +1052,9 @@ export function readPage(raw, state = { keys: [], times: null }) {
 			else braces.push({ y0: f.y0, y1: f.y1, x0: f.x0, curve: true });
 		}
 		// un crochet de chœur n'est pas une accolade : les portées avec paroles restent séparées
-		const sung = sys.map((_, k) => lyr[k].length > 0);
+		// (quelques mots isolés sous une portée de piano, « D.C. al Fine », ne font pas des paroles)
+		const DIR = /^(d\.?\s?c\.?|d\.?\s?s\.?|da|dal|capo|segno|al|fine|coda|to|rit\.?|rall\.?)$/i;
+		const sung = sys.map((_, k) => lyr[k].some((t) => !DIR.test(String(t.str ?? "").trim())));
 		// indications de tempo au-dessus du système : « ♩ = 120 »
 		const tempos = [];
 		for (const eq of raw.glyphs) {
