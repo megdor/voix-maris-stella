@@ -1250,7 +1250,7 @@ function encodeWav(pcm,rate){
 }
 function fileBase(sel,loop){
   const title=($("#title").textContent||"partition").trim();
-  const on=S.tracks.filter((t,i)=>sel[i]>0), all=on.length===S.tracks.length && on.every(t=>t.vol>=.95);
+  const on=S.tracks.filter((t,i)=>sel[i]>0), all=on.length===S.tracks.length;
   let who=all?"toutes les voix":on.length===1?on[0].name:on.map(t=>t.name).join(" + ");
   if(!all && on.length>1 && S.tracks.some((t,i)=>sel[i]>0 && sel[i]<.5)) who=on.filter((t,i)=>sel[S.tracks.indexOf(t)]>=.5).map(t=>t.name).join(" + ")+" en avant";
   let n=title+" - "+who;
