@@ -77,6 +77,7 @@ function signature(part) {
 	const clefs = new Map();
 	let sum = 0;
 	let n = 0;
+	let sung = 0;
 	for (const m of childrenOf(part, "measure")) {
 		for (const attrs of childrenOf(m, "attributes")) {
 			for (const el of attrs.children) {
@@ -97,6 +98,9 @@ function signature(part) {
 			if (!p) {
 				continue;
 			}
+			if (childrenOf(note, "lyric").length) {
+				sung++;
+			}
 			const step = childrenOf(p, "step")[0]?.text;
 			const octave = Number(childrenOf(p, "octave")[0]?.text);
 			const alter = Number(childrenOf(p, "alter")[0]?.text ?? 0);
@@ -107,7 +111,7 @@ function signature(part) {
 		}
 	}
 	const two = twoVoices(part);
-	return { staves, clefs, mean: n ? sum / n : null, ...two };
+	return { staves, clefs, mean: n ? sum / n : null, sung: sung >= 3, ...two };
 }
 
 const midiOf = (note) => {
@@ -454,7 +458,9 @@ function matchParts(old, page, recent = [], spread = true, wasSpread = []) {
 			}
 			// two one-staff parts of the page = the two staves of a part (a piano
 			// whose brace was not seen on this page)
-			if (i < I && j + 1 < J && old[i].staves === 2 && page[j].staves === 1 && page[j + 1].staves === 1) {
+			// (pas deux portées chantées : ténor et basse ne sont pas les deux mains du piano — Gevaert,
+			// Venez divin Messie, dont le premier système n'a que le piano)
+			if (i < I && j + 1 < J && old[i].staves === 2 && page[j].staves === 1 && page[j + 1].staves === 1 && !(page[j].sung && page[j + 1].sung)) {
 				const v = c + PAIR + unlike(old[i], pairSig(page[j], page[j + 1]));
 				if (v < cost[i + 1][j + 2]) {
 					cost[i + 1][j + 2] = v;
